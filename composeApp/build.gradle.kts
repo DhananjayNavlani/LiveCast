@@ -59,7 +59,7 @@ kotlin {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
 
-
+            implementation(libs.bundles.webrtc.android)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
