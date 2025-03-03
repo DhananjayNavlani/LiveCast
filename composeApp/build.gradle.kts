@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.googleServices)
 }
 
 kotlin {
@@ -60,6 +61,12 @@ kotlin {
             implementation(libs.androidx.activity.compose)
 
             implementation(libs.bundles.webrtc.android)
+            implementation(libs.stream.log.android)
+
+            implementation(project.dependencies.platform(libs.firebase.android.bom))
+            implementation(libs.bundles.firebase.android)
+            implementation(libs.firebase.auth.ui)
+
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -70,6 +77,10 @@ kotlin {
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
+
+            implementation(project.dependencies.platform(libs.koin.bom))
+            implementation(libs.koin.core)
+
         }
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)
