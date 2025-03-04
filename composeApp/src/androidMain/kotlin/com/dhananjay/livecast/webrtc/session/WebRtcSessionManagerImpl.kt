@@ -250,7 +250,8 @@ class WebRtcSessionManagerImpl(
     val offer = peerConnection.createOffer().getOrThrow()
     val result = peerConnection.setLocalDescription(offer)
     result.onSuccess {
-      signalingClient.sendCommand(SignalingCommand.OFFER, offer.description)
+//      signalingClient.sendCommand(SignalingCommand.OFFER, offer)
+      signalingClient.sendOfferAnswer(offer)
     }
     logger.d { "[SDP] send offer: ${offer.stringify()}" }
   }
@@ -262,7 +263,8 @@ class WebRtcSessionManagerImpl(
     val answer = peerConnection.createAnswer().getOrThrow()
     val result = peerConnection.setLocalDescription(answer)
     result.onSuccess {
-      signalingClient.sendCommand(SignalingCommand.ANSWER, answer.description)
+//      signalingClient.sendCommand(SignalingCommand.ANSWER, answer.description)
+      signalingClient.sendOfferAnswer(answer)
     }
     logger.d { "[SDP] send answer: ${answer.stringify()}" }
   }

@@ -16,6 +16,7 @@
 
 package com.dhananjay.livecast.webrtc.connection
 
+import com.google.firebase.firestore.FirebaseFirestore
 import io.getstream.log.taggedLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,14 +27,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import org.webrtc.SessionDescription
+
 //import okhttp3.OkHttpClient
 //import okhttp3.Request
 //import okhttp3.WebSocket
 //import okhttp3.WebSocketListener
 
-class SignalingClient {
+class SignalingClient(
+  private val firestore: FirebaseFirestore
+) {
   private val logger by taggedLogger("Call:SignalingClient")
   private val signalingScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
 //  private val client = OkHttpClient()
 //  private val request = Request
 //    .Builder()
@@ -51,9 +57,25 @@ class SignalingClient {
   private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>()
   val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
 
+  fun sendOfferAnswer(sdp: SessionDescription){
+
+  }
   fun sendCommand(signalingCommand: SignalingCommand, message: String) {
     logger.d { "[sendCommand] $signalingCommand $message" }
 //    ws.send("$signalingCommand $message")
+    when(signalingCommand) {
+      SignalingCommand.STATE -> {
+
+      }
+      SignalingCommand.OFFER -> {
+        val callDoc = firestore.collection("calls").document()
+        val offerCandidates = callDoc.collection("offerCandidates")
+        val answerCandidates = callDoc.collection("answerCandidates")
+
+      }
+      SignalingCommand.ANSWER -> Unit
+      SignalingCommand.ICE -> Unit
+    }
   }
 
 //  private inner class SignalingWebSocketListener : WebSocketListener() {

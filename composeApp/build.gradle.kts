@@ -67,6 +67,8 @@ kotlin {
             implementation(libs.bundles.firebase.android)
             implementation(libs.firebase.auth.ui)
 
+            implementation(libs.koin.android)
+            implementation(libs.koin.androidx.compose)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
