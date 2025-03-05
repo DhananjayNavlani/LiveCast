@@ -24,11 +24,12 @@ import android.hardware.camera2.CameraMetadata
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
 import android.os.Build
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.content.getSystemService
+import com.dhananjay.livecast.cast.model.Ice
+import com.dhananjay.livecast.cast.model.OfferAnswer
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.connection.SignalingCommand
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnection
@@ -56,7 +57,7 @@ import org.webrtc.VideoCapturer
 import org.webrtc.VideoTrack
 import java.util.UUID
 
-private const val ICE_SEPARATOR = '$'
+const val ICE_SEPARATOR = '$'
 
 val LocalWebRtcSessionManager: ProvidableCompositionLocal<WebRtcSessionManager> =
   staticCompositionLocalOf { error("WebRtcSessionManager was not initialized!") }
@@ -162,10 +163,11 @@ class WebRtcSessionManagerImpl(
       configuration = peerConnectionFactory.rtcConfig,
       type = StreamPeerType.SUBSCRIBER,
       mediaConstraints = mediaConstraints,
-      onIceCandidateRequest = { iceCandidate, _ ->
+      onIceCandidateRequest = { iceCandidate, type ->
         signalingClient.sendCommand(
           SignalingCommand.ICE,
-          "${iceCandidate.sdpMid}$ICE_SEPARATOR${iceCandidate.sdpMLineIndex}$ICE_SEPARATOR${iceCandidate.sdp}"
+          "${iceCandidate.sdpMid}$ICE_SEPARATOR${iceCandidate.sdpMLineIndex}$ICE_SEPARATOR${iceCandidate.sdp}",
+          type
         )
       },
       onVideoTrack = { rtpTransceiver ->
@@ -195,12 +197,12 @@ class WebRtcSessionManagerImpl(
   }
 
   override fun onSessionScreenReady() {
-    setupAudio()
-    peerConnection.connection.addTrack(localVideoTrack)
-    peerConnection.connection.addTrack(localAudioTrack)
+//    setupAudio()
+//    peerConnection.connection.addTrack(localVideoTrack)
+//    peerConnection.connection.addTrack(localAudioTrack)
     sessionManagerScope.launch {
       // sending local video track to show local video from start
-      _localVideoTrackFlow.emit(localVideoTrack)
+//      _localVideoTrackFlow.emit(localVideoTrack)
 
       if (offer != null) {
         sendAnswer()
@@ -250,8 +252,7 @@ class WebRtcSessionManagerImpl(
     val offer = peerConnection.createOffer().getOrThrow()
     val result = peerConnection.setLocalDescription(offer)
     result.onSuccess {
-//      signalingClient.sendCommand(SignalingCommand.OFFER, offer)
-      signalingClient.sendOfferAnswer(offer)
+      signalingClient.sendCommand(SignalingCommand.OFFER, offer.description)
     }
     logger.d { "[SDP] send offer: ${offer.stringify()}" }
   }
@@ -263,8 +264,7 @@ class WebRtcSessionManagerImpl(
     val answer = peerConnection.createAnswer().getOrThrow()
     val result = peerConnection.setLocalDescription(answer)
     result.onSuccess {
-//      signalingClient.sendCommand(SignalingCommand.ANSWER, answer.description)
-      signalingClient.sendOfferAnswer(answer)
+      signalingClient.sendCommand(SignalingCommand.ANSWER, answer.description)
     }
     logger.d { "[SDP] send answer: ${answer.stringify()}" }
   }

@@ -14,18 +14,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dhananjay.livecast.cast.stage.StageScreen
 import com.dhananjay.livecast.cast.video.ScreenCastScreen
-import com.dhananjay.livecast.webrtc.connection.SignalingClient
-import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
-import com.dhananjay.livecast.webrtc.session.WebRtcSessionManagerImpl
-import org.koin.java.KoinJavaComponent.inject
+import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
     private val sessionManager: WebRtcSessionManager by inject()
@@ -44,7 +40,7 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalWebRtcSessionManager provides sessionManager) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colors.background) {
                         var onCallScreen by remember { mutableStateOf(false) }
-                        val state by sessionManager.signalingClient.sessionStateFlow.collectAsStateWithLifecycle()
+                        val state by sessionManager.signalingClient.devicesOnline.collectAsStateWithLifecycle(null)
                         if (!onCallScreen) {
                             StageScreen(state = state,{
                                 onCallScreen = true
@@ -60,6 +56,11 @@ class MainActivity : ComponentActivity() {
             }
 
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        sessionManager.disconnect()
     }
 }
 

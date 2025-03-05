@@ -40,8 +40,8 @@ fun ScreenCastScreen(onCapture: () -> Unit) {
         val remoteVideoTrackState by sessionManager.remoteVideoTrackFlow.collectAsState(null)
         val remoteVideoTrack = remoteVideoTrackState
 
-        val localVideoTrackState by sessionManager.localVideoTrackFlow.collectAsState(null)
-        val localVideoTrack = localVideoTrackState
+        /*val localVideoTrackState by sessionManager.localVideoTrackFlow.collectAsState(null)
+        val localVideoTrack = localVideoTrackState*/
 
         var callMediaState by remember { mutableStateOf(CallMediaState()) }
 
@@ -54,7 +54,7 @@ fun ScreenCastScreen(onCapture: () -> Unit) {
             )
         }
 
-        if (localVideoTrack != null && callMediaState.isCameraEnabled) {
+/*        if (localVideoTrack != null && callMediaState.isCameraEnabled) {
             FloatingVideoRenderer(
                 modifier = Modifier
                     .size(width = 150.dp, height = 210.dp)
@@ -64,7 +64,7 @@ fun ScreenCastScreen(onCapture: () -> Unit) {
                 parentBounds = parentSize,
                 paddingValues = PaddingValues(0.dp)
             )
-        }
+        }*/
 
         val activity = LocalActivity.current
 

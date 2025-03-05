@@ -16,17 +16,36 @@
 
 package com.dhananjay.livecast.webrtc.connection
 
+import android.os.Build
+import com.dhananjay.livecast.cast.model.DeviceOnline
+import com.dhananjay.livecast.cast.model.Ice
+import com.dhananjay.livecast.cast.model.OfferAnswer
+import com.dhananjay.livecast.webrtc.peer.StreamPeerType
+import com.dhananjay.livecast.webrtc.session.ICE_SEPARATOR
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.MetadataChanges
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.SnapshotListenOptions
+import com.google.firebase.firestore.model.Document
+import com.google.firebase.firestore.toObject
 import io.getstream.log.taggedLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import org.webrtc.SessionDescription
 
 //import okhttp3.OkHttpClient
@@ -35,10 +54,10 @@ import org.webrtc.SessionDescription
 //import okhttp3.WebSocketListener
 
 class SignalingClient(
-  private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore
 ) {
-  private val logger by taggedLogger("Call:SignalingClient")
-  private val signalingScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val logger by taggedLogger("Call:SignalingClient")
+    private val signalingScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
 //  private val client = OkHttpClient()
 //  private val request = Request
@@ -46,37 +65,186 @@ class SignalingClient(
 //    .url(BuildConfig.SIGNALING_SERVER_IP_ADDRESS)
 //    .build()
 
-  // opening web socket with signaling server
+    // opening web socket with signaling server
 //  private val ws = client.newWebSocket(request, SignalingWebSocketListener())
+    private var callDoc: DocumentReference? = null
+    private val offerCandidates get() = callDoc?.collection("offerCandidates")
+    private val answerCandidates get() = callDoc?.collection("answerCandidates")
 
-  // session flow to send information about the session state to the subscribers
-  private val _sessionStateFlow = MutableStateFlow(WebRTCSessionState.Offline)
-  val sessionStateFlow: StateFlow<WebRTCSessionState> = _sessionStateFlow
+    val devicesOnline = callbackFlow<DeviceOnline> {
+        val listener = firestore.collection("rooms").document("online")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    logger.e { "Error fetching offer: $error" }
+                    return@addSnapshotListener
+                }
 
-  // signaling commands to send commands to value pairs to the subscribers
-  private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>()
-  val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
-
-  fun sendOfferAnswer(sdp: SessionDescription){
-
-  }
-  fun sendCommand(signalingCommand: SignalingCommand, message: String) {
-    logger.d { "[sendCommand] $signalingCommand $message" }
-//    ws.send("$signalingCommand $message")
-    when(signalingCommand) {
-      SignalingCommand.STATE -> {
-
-      }
-      SignalingCommand.OFFER -> {
-        val callDoc = firestore.collection("calls").document()
-        val offerCandidates = callDoc.collection("offerCandidates")
-        val answerCandidates = callDoc.collection("answerCandidates")
-
-      }
-      SignalingCommand.ANSWER -> Unit
-      SignalingCommand.ICE -> Unit
+                snapshot.toObject(DeviceOnline::class.java)?.let {
+                    trySend(it)
+                }
+            }
+        awaitClose { listener.remove() }
     }
-  }
+
+    private var callId: String? = null
+    init {
+        signalingScope.launch {
+            firestore.collection("rooms").document("online").set(
+                hashMapOf("count" to FieldValue.increment(1), "devices" to FieldValue.arrayUnion("${Build.DEVICE}_${Build.MANUFACTURER}")),
+                SetOptions.merge()
+            ).await()
+
+            firestore.collection("calls")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(1)
+                .addSnapshotListener{ snapshot, error ->
+                    if (error != null || snapshot == null) {
+                        logger.e { "Error fetching offer: $error" }
+                        return@addSnapshotListener
+                    }
+
+                    snapshot.documentChanges.forEach { change ->
+                        if (change.type == DocumentChange.Type.ADDED) {
+                            callId = change.document.id
+                        }
+                    }
+                    callId?.let {
+                        callDoc = firestore.collection("calls").document(it)
+
+                        callDoc!!.get().addOnSuccessListener {
+                            it.toObject(OfferAnswer::class.java)?.let {
+                                if (it.isOffer) {
+                                    _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+
+        }
+    }
+
+
+    // signaling commands to send commands to value pairs to the subscribers
+    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>()
+    val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
+
+
+
+    fun sendCommand(
+        signalingCommand: SignalingCommand,
+        message: String,
+        type: StreamPeerType = StreamPeerType.PUBLISHER
+    ) {
+        logger.d { "[sendCommand] $signalingCommand $message $type" }
+//    ws.send("$signalingCommand $message")
+        when (signalingCommand) {
+            SignalingCommand.STATE -> {
+
+            }
+
+            SignalingCommand.OFFER -> {
+                callDoc = firestore.collection("calls").document()
+
+                callDoc!!.set(
+                    OfferAnswer(
+                        sdp = message,
+                        isOffer = true
+                    )
+                )
+
+                //listen for remote answer
+                callDoc!!.addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) {
+                        logger.e { "Error fetching offer: $error" }
+                        return@addSnapshotListener
+                    }
+
+                    snapshot.toObject(OfferAnswer::class.java)?.let {
+                        if (!it.isOffer) {
+                            _signalingCommandFlow.tryEmit(SignalingCommand.ANSWER to it.sdp)
+                        }
+                    }
+                }
+
+                //listen for remote ice candidates
+                answerCandidates!!.addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) {
+                        logger.e { "Error fetching offer: $error" }
+                        return@addSnapshotListener
+                    }
+
+                    snapshot.documentChanges.forEach { change ->
+                        if (change.type == DocumentChange.Type.ADDED) {
+                            change.document.toObject(Ice::class.java).let {
+                                _signalingCommandFlow.tryEmit(SignalingCommand.ICE to it.toString())
+                            }
+                        }
+                    }
+                }
+
+
+            }
+
+            SignalingCommand.ANSWER -> {
+                signalingScope.launch {
+
+                    callId?.let {
+
+                        callDoc!!.set(
+                            OfferAnswer(
+                                sdp = message,
+                                isOffer = false
+                            ),
+                            SetOptions.merge()
+                        ).await()
+
+
+                        offerCandidates?.addSnapshotListener { snapshot, error ->
+
+                            if (error != null || snapshot == null) {
+                                logger.e { "Error fetching offer: $error" }
+                                return@addSnapshotListener
+                            }
+
+                            snapshot.documentChanges.forEach { change ->
+                                if (change.type == DocumentChange.Type.ADDED) {
+                                    change.document.toObject(Ice::class.java).let {
+                                        _signalingCommandFlow.tryEmit(SignalingCommand.ICE to it.toString())
+                                    }
+                                }
+                            }
+                        }
+
+
+                    }
+                }
+
+            }
+
+            SignalingCommand.ICE -> {
+                val (mid, index, sdp) = message.split(ICE_SEPARATOR)
+                val ice = Ice(
+                    sdpMid = mid,
+                    sdpMLineIndex = index.toInt(),
+                    candidate = sdp
+                )
+                signalingScope.launch {
+                    when (type) {
+                        StreamPeerType.PUBLISHER -> {
+                            answerCandidates?.add(ice)?.await()
+                        }
+
+                        StreamPeerType.SUBSCRIBER -> {
+                            offerCandidates?.add(ice)?.await()
+                        }
+                    }
+
+                }
+            }
+        }
+    }
 
 //  private inner class SignalingWebSocketListener : WebSocketListener() {
 //    override fun onMessage(webSocket: WebSocket, text: String) {
@@ -93,39 +261,46 @@ class SignalingClient(
 //    }
 //  }
 
-  private fun handleStateMessage(message: String) {
-    val state = getSeparatedMessage(message)
-    _sessionStateFlow.value = WebRTCSessionState.valueOf(state)
-  }
-
-  private fun handleSignalingCommand(command: SignalingCommand, text: String) {
-    val value = getSeparatedMessage(text)
-    logger.d { "received signaling: $command $value" }
-    signalingScope.launch {
-      _signalingCommandFlow.emit(command to value)
+    private fun handleStateMessage(message: String) {
+        val state = getSeparatedMessage(message)
+//        _sessionStateFlow.value = WebRTCSessionState.valueOf(state)
     }
-  }
 
-  private fun getSeparatedMessage(text: String) = text.substringAfter(' ')
+    private fun handleSignalingCommand(command: SignalingCommand, text: String) {
+        val value = getSeparatedMessage(text)
+        logger.d { "received signaling: $command $value" }
+        signalingScope.launch {
+            _signalingCommandFlow.emit(command to value)
+        }
+    }
 
-  fun dispose() {
-    _sessionStateFlow.value = WebRTCSessionState.Offline
-    signalingScope.cancel()
+    private fun getSeparatedMessage(text: String) = text.substringAfter(' ')
+
+    fun dispose() {
+//        _sessionStateFlow.value = WebRTCSessionState.Offline
+        signalingScope.launch {
+            firestore.collection("rooms").document("online").set(
+                hashMapOf("count" to FieldValue.increment(-1), "devices" to FieldValue.arrayRemove("${Build.DEVICE}_${Build.MANUFACTURER}")),
+                SetOptions.merge()
+            ).await()
+        }
+        signalingScope.coroutineContext.cancelChildren()
+
 //    ws.cancel()
-  }
+    }
 }
 
 enum class WebRTCSessionState {
-  Active, // Offer and Answer messages has been sent
-  Creating, // Creating session, offer has been sent
-  Ready, // Both clients available and ready to initiate session
-  Impossible, // We have less than two clients connected to the server
-  Offline // unable to connect signaling server
+    Active, // Offer and Answer messages has been sent
+    Creating, // Creating session, offer has been sent
+    Ready, // Both clients available and ready to initiate session
+    Impossible, // We have less than two clients connected to the server
+    Offline // unable to connect signaling server
 }
 
 enum class SignalingCommand {
-  STATE, // Command for WebRTCSessionState
-  OFFER, // to send or receive offer
-  ANSWER, // to send or receive answer
-  ICE // to send and receive ice candidates
+    STATE, // Command for WebRTCSessionState
+    OFFER, // to send or receive offer
+    ANSWER, // to send or receive answer
+    ICE // to send and receive ice candidates
 }
