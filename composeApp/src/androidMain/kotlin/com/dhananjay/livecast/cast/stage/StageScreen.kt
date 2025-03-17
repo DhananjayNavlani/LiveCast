@@ -23,6 +23,7 @@ fun StageScreen(
     state: DeviceOnline?,
     onJoinCall: () -> Unit,
     modifier: Modifier = Modifier) {
+
     val sessionManager = LocalWebRtcSessionManager.current
     Box(modifier = Modifier.fillMaxSize()) {
         var enabledCall by remember { mutableStateOf(false) }
@@ -61,13 +62,14 @@ fun StageScreen(
                 fontWeight = FontWeight.Bold
             )
         }*/
+
         Column(
             modifier = modifier.align(Alignment.TopCenter)
         ) {
             Text("Count:${state?.count ?: 0}")
             if(state?.count != null && state.count > 0) {
                 LazyColumn {
-                    items(state.devices) { device ->
+                    items(state.names) { device ->
                         Text(device)
                     }
                 }
@@ -75,7 +77,7 @@ fun StageScreen(
             }
         }
         Button(onClick = {
-//            sessionManager.createSession()
+            onJoinCall()
         },
             modifier = Modifier.align(Alignment.Center)) {
             Text(text = "Start Session")

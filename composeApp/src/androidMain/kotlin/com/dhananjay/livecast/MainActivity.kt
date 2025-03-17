@@ -17,7 +17,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
 import com.dhananjay.livecast.cast.stage.StageScreen
+import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.cast.video.ScreenCastScreen
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
@@ -25,10 +34,24 @@ import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
     private val sessionManager: WebRtcSessionManager by inject()
-    private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
-        result ->
-        if(result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
-        sessionManager.handleScreenSharing(result.data!!)
+    private val workManager: WorkManager by inject()
+    private val oneTimeWorkReq = OneTimeWorkRequestBuilder<DeviceOnlineWorker>().setConstraints(
+            Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        ).setInputData(workDataOf(Constants.KEY_IS_ONLINE to true))
+        .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST).build()
+
+    private val captureLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
+            sessionManager.handleScreenSharing(result.data!!)
+
+        }
+
+    override fun onStart() {
+        super.onStart()
+        workManager.enqueueUniqueWork(
+            Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE, oneTimeWorkReq
+        )
 
     }
 
@@ -38,15 +61,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 CompositionLocalProvider(LocalWebRtcSessionManager provides sessionManager) {
-                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colors.background) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(), color = MaterialTheme.colors.background
+                    ) {
                         var onCallScreen by remember { mutableStateOf(false) }
-                        val state by sessionManager.signalingClient.devicesOnline.collectAsStateWithLifecycle(null)
+                        val state by sessionManager.signalingClient.devicesOnline.collectAsStateWithLifecycle(
+                            null
+                        )
                         if (!onCallScreen) {
-                            StageScreen(state = state,{
+                            StageScreen(state = state, onJoinCall = {
                                 onCallScreen = true
                             })
                         } else {
-                            ScreenCastScreen{
+                            ScreenCastScreen {
                                 captureLauncher.launch(manager.createScreenCaptureIntent())
                             }
                         }
@@ -60,6 +87,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        workManager.enqueueUniqueWork(
+            Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<DeviceOnlineWorker>().setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            ).setInputData(workDataOf(Constants.KEY_IS_ONLINE to false))
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST).build()
+        )
         sessionManager.disconnect()
     }
 }

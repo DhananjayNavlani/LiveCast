@@ -63,12 +63,16 @@ kotlin {
             implementation(libs.bundles.webrtc.android)
             implementation(libs.stream.log.android)
 
+            //workmanager
+            implementation(libs.androidx.work)
+
             implementation(project.dependencies.platform(libs.firebase.android.bom))
             implementation(libs.bundles.firebase.android)
             implementation(libs.firebase.auth.ui)
 
             implementation(libs.koin.android)
             implementation(libs.koin.androidx.compose)
+            implementation(libs.koin.androidx.work)
         }
         commonMain.dependencies {
             implementation(compose.runtime)

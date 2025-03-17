@@ -1,7 +1,11 @@
 package com.dhananjay.livecast.cast.model
 
+import com.google.firebase.firestore.DocumentId
+
 data class DeviceOnline(
+    @DocumentId
     val id: String = "",
     val count: Int = 0,
-    val devices: List<String> = emptyList()
+    val names: List<String> = emptyList(),
+    val devices: List<Int> = emptyList()
 )

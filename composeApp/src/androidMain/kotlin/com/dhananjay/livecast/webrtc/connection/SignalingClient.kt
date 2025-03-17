@@ -26,27 +26,22 @@ import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.SnapshotListenOptions
-import com.google.firebase.firestore.model.Document
 import com.google.firebase.firestore.toObject
 import io.getstream.log.taggedLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import org.webrtc.SessionDescription
+import kotlin.coroutines.coroutineContext
 
 //import okhttp3.OkHttpClient
 //import okhttp3.Request
@@ -67,37 +62,32 @@ class SignalingClient(
 
     // opening web socket with signaling server
 //  private val ws = client.newWebSocket(request, SignalingWebSocketListener())
+
     private var callDoc: DocumentReference? = null
     private val offerCandidates get() = callDoc?.collection("offerCandidates")
     private val answerCandidates get() = callDoc?.collection("answerCandidates")
+    private var callId: String? = null
 
-    val devicesOnline = callbackFlow<DeviceOnline> {
-        val listener = firestore.collection("rooms").document("online")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    logger.e { "Error fetching offer: $error" }
-                    return@addSnapshotListener
-                }
-
-                snapshot.toObject(DeviceOnline::class.java)?.let {
-                    trySend(it)
-                }
-            }
-        awaitClose { listener.remove() }
+    private val deviceId by lazy {
+        "${Build.FINGERPRINT}_${Build.DEVICE}_${Build.MANUFACTURER}".hashCode()
+    }
+    private val deviceName by lazy {
+        "${Build.DEVICE}_${Build.MANUFACTURER}_${Build.MODEL}"
     }
 
-    private var callId: String? = null
+
+    // signaling commands to send commands to value pairs to the subscribers
+    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>()
+    val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
+
     init {
         signalingScope.launch {
-            firestore.collection("rooms").document("online").set(
-                hashMapOf("count" to FieldValue.increment(1), "devices" to FieldValue.arrayUnion("${Build.DEVICE}_${Build.MANUFACTURER}")),
-                SetOptions.merge()
-            ).await()
+
 
             firestore.collection("calls")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .limit(1)
-                .addSnapshotListener{ snapshot, error ->
+                .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
                         logger.e { "Error fetching offer: $error" }
                         return@addSnapshotListener
@@ -125,12 +115,64 @@ class SignalingClient(
         }
     }
 
+    val devicesOnline = callbackFlow<DeviceOnline> {
+        val listener = firestore.collection("rooms").document("online")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    logger.e { "Error fetching offer: $error" }
+                    return@addSnapshotListener
+                }
 
-    // signaling commands to send commands to value pairs to the subscribers
-    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>()
-    val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
+                snapshot.toObject(DeviceOnline::class.java)?.let {
+                    trySend(it)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
 
 
+    suspend fun addDeviceOnline(): Boolean {
+        return try {
+            firestore.collection("rooms").document("online").set(
+                hashMapOf(
+                    "count" to FieldValue.increment(1),
+                    "names" to FieldValue.arrayUnion(deviceName),
+                    "devices" to FieldValue.arrayUnion(deviceId)
+                ),
+                SetOptions.merge()
+            ).await()
+            true
+        }catch (e: Exception){
+            coroutineContext.ensureActive()
+            logger.e { "Error adding device online: $e" }
+            false
+        }
+
+    }
+    suspend fun removeDeviceOnline(): Boolean {
+        return try {
+            firestore.collection("rooms").document("online").let {
+                val hasDevice =
+                    it.get().await().toObject<DeviceOnline>()?.devices?.contains(deviceId) ?: false
+                if (hasDevice) {
+                    it.set(
+                        hashMapOf(
+                            "count" to FieldValue.increment(-1),
+                            "names" to FieldValue.arrayRemove(deviceName),
+                            "devices" to FieldValue.arrayRemove(deviceId)
+                        ),
+                        SetOptions.merge()
+                    ).await()
+                }
+            }
+            true
+        }catch (e: Exception){
+            coroutineContext.ensureActive()
+            logger.e { "Error removing device online: $e" }
+            false
+        }
+
+    }
 
     fun sendCommand(
         signalingCommand: SignalingCommand,
@@ -280,7 +322,10 @@ class SignalingClient(
 //        _sessionStateFlow.value = WebRTCSessionState.Offline
         signalingScope.launch {
             firestore.collection("rooms").document("online").set(
-                hashMapOf("count" to FieldValue.increment(-1), "devices" to FieldValue.arrayRemove("${Build.DEVICE}_${Build.MANUFACTURER}")),
+                hashMapOf(
+                    "count" to FieldValue.increment(-1),
+                    "devices" to FieldValue.arrayRemove("${Build.DEVICE}_${Build.MANUFACTURER}")
+                ),
                 SetOptions.merge()
             ).await()
         }
