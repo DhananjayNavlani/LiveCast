@@ -82,8 +82,6 @@ class SignalingClient(
 
     init {
         signalingScope.launch {
-
-
             firestore.collection("calls")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .limit(1)
@@ -133,14 +131,23 @@ class SignalingClient(
 
     suspend fun addDeviceOnline(): Boolean {
         return try {
-            firestore.collection("rooms").document("online").set(
-                hashMapOf(
-                    "count" to FieldValue.increment(1),
-                    "names" to FieldValue.arrayUnion(deviceName),
-                    "devices" to FieldValue.arrayUnion(deviceId)
-                ),
-                SetOptions.merge()
-            ).await()
+            firestore.collection("rooms").document("online").let {
+                val hasDevice =
+                    it.get().await().toObject<DeviceOnline>()?.devices?.contains(deviceId) ?: false
+                if(!hasDevice){
+                    it.set(
+                        hashMapOf(
+                            "count" to FieldValue.increment(1),
+                            "names" to FieldValue.arrayUnion(deviceName),
+                            "devices" to FieldValue.arrayUnion(deviceId)
+                        ),
+                        SetOptions.merge()
+                    ).await()
+                }
+
+
+            }
+
             true
         }catch (e: Exception){
             coroutineContext.ensureActive()
