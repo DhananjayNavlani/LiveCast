@@ -15,6 +15,8 @@ firebase-android = "33.10.0"
 firebase-auth-ui = "8.0.1"
 koin = "4.0.2"
 google-services = "4.4.2"
+crashlytics = "3.0.3"
+lumo = "1.2.2"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
@@ -35,6 +37,7 @@ firebase-android-bom = { group = "com.google.firebase", name = "firebase-bom", v
 firebase-auth-ui = { group = "com.firebaseui", name = "firebase-ui-auth", version.ref = "firebase-auth-ui" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore-ktx" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics-ktx" }
 
 koin-bom = { group = "io.insert-koin", name = "koin-bom", version.ref = "koin" }
 koin-core = { group = "io.insert-koin", name = "koin-core" }
@@ -49,7 +52,9 @@ composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose-mu
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 googleServices = { id = "com.google.gms.google-services", version.ref = "google-services"}
+crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlytics" }
+lumo = {id = "com.nomanr.plugin.lumo", version.ref = "lumo"}
 
 [bundles]
 webrtc-android = ["webrtc-android-bom", "webrtc-android", "webrtc-android-ui", "webrtc-compose", "webrtc-ktx"]
-firebase-android = [ "firebase-firestore", "firebase-auth"]
+firebase-android = [ "firebase-firestore", "firebase-auth", "firebase-crashlytics"]
