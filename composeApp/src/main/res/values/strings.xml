@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="notification_channel_name">App updates channel</string>
-    <string name="notification_channel_desc">Notification on app updates</string>
-    <string name="screen_sharing">The screen capture has begin</string>
+    <string name="screen_sharing">Your screen is getting shared.</string>
 </resources>

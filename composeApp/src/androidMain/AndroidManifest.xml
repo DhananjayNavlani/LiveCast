@@ -21,7 +21,7 @@
 
 
         <service
-            android:name=".ScreenSharingService"
+            android:name=".cast.data.services.ScreenSharingService"
             android:foregroundServiceType="mediaProjection"
             android:enabled="true"
             android:exported="false"/>

@@ -22,6 +22,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
+import com.dhananjay.livecast.cast.data.services.ScreenSharingService
 import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
 import com.dhananjay.livecast.cast.presentation.stage.StageScreen
 import com.dhananjay.livecast.cast.presentation.video.ScreenCastScreen
@@ -48,7 +49,7 @@ class MainActivity : ComponentActivity() {
             Log.d(TAG, "The result is ${result.resultCode} && ${result.data?.action} ")
             if (result.resultCode != RESULT_OK || result.data == null) return@registerForActivityResult
             sessionManager.handleScreenSharing(result.data!!)
-            Intent(this,ScreenSharingService::class.java).apply {
+            Intent(this, ScreenSharingService::class.java).apply {
                 action = Constants.ACTION_START_SCREEN_SHARING
             }.also {
                 startService(it)

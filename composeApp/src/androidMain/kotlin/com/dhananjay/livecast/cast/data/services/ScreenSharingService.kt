@@ -1,8 +1,9 @@
-package com.dhananjay.livecast
+package com.dhananjay.livecast.cast.data.services
 
 import android.app.Service
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import com.dhananjay.livecast.R
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.cast.utils.NotificationHelper
 import org.koin.core.component.KoinComponent
