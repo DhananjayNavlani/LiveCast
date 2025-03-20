@@ -29,6 +29,8 @@ import android.util.Log
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.content.getSystemService
+import com.dhananjay.livecast.ScreenSharingService
+import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.connection.SignalingCommand
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnection
@@ -247,6 +249,11 @@ class WebRtcSessionManagerImpl(
             localVideoTrack.dispose()
             videoCapturer.stopCapture()
             videoCapturer.dispose()
+            Intent(context,ScreenSharingService::class.java).apply {
+                action = Constants.ACTION_STOP_SCREEN_SHARING
+            }.also {
+                context.startForegroundService(it)
+            }
         }
 
         // dispose audio handler and video capturer.

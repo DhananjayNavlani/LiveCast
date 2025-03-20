@@ -24,7 +24,7 @@ val appModule = module {
     }
     singleOf(::NotificationHelper)
     worker { DeviceOnlineWorker(get(),get(),get()) }
-    viewModel { MainViewModel() }
+    viewModel { MainViewModel(get()) }
     single { WorkManager.getInstance(get()) }
 }
 

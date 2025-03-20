@@ -135,17 +135,20 @@ class SignalingClient(
     suspend fun addDeviceOnline(): Boolean {
         return try {
             firestore.collection("rooms").document("online").let {
-                val hasDevice = it.get().await().toObject<DeviceOnline>()?.devices?.contains(deviceId) ?: false
-                Log.d(TAG, "addDeviceOnline: The collection has device ? $hasDevice")
+                val deviceOnline = it.get().await().takeIf { it.exists() }?.toObject<DeviceOnline>()
+                val hasDevice = deviceOnline?.devices?.contains(deviceId) ?: false
+
+                Log.d(TAG, "addDeviceOnline: The collection has device ? $deviceOnline")
                 if(!hasDevice){
+                    var count = deviceOnline?.count?.coerceAtLeast(0) ?: 0
                     it.set(
                         hashMapOf(
-                            "count" to FieldValue.increment(1),
+                            "count" to ++count,
                             "names" to FieldValue.arrayUnion(deviceName),
                             "devices" to FieldValue.arrayUnion(deviceId)
                         ),
                         SetOptions.merge()
-                    )
+                    ).await()
                 }
 
             }
@@ -161,17 +164,20 @@ class SignalingClient(
     suspend fun removeDeviceOnline(): Boolean {
         return try {
             firestore.collection("rooms").document("online").let {
-                val hasDevice = it.get().await().toObject<DeviceOnline>()?.devices?.contains(deviceId) ?: false
-                Log.d(TAG, "removeDeviceOnline: The collection has device ? $hasDevice")
+                val deviceOnline = it.get().await().takeIf { it.exists() }?.toObject<DeviceOnline>()
+                val hasDevice = deviceOnline?.devices?.contains(deviceId) ?: false
+
+                Log.d(TAG, "removeDeviceOnline: The collection has device ? $deviceOnline")
                 if (hasDevice) {
+                    var count = deviceOnline?.count?.coerceAtLeast(1) ?: 1
                     it.set(
                         hashMapOf(
-                            "count" to FieldValue.increment(-1),
+                            "count" to --count,
                             "names" to FieldValue.arrayRemove(deviceName),
                             "devices" to FieldValue.arrayRemove(deviceId)
                         ),
                         SetOptions.merge()
-                    )
+                    ).await()
                 }
             }
             true

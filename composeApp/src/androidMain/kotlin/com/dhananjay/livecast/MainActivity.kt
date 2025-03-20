@@ -18,12 +18,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
-import androidx.work.workDataOf
 import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
 import com.dhananjay.livecast.cast.presentation.stage.StageScreen
 import com.dhananjay.livecast.cast.presentation.video.ScreenCastScreen
@@ -61,10 +59,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        workManager.enqueueUniqueWork(
-            Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE, oneTimeWorkReq.setInputData(workDataOf(Constants.KEY_IS_ONLINE to true)).build()
-        )
-
+//        workManager.enqueueUniqueWork(
+//            Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE, oneTimeWorkReq.setInputData(workDataOf(Constants.KEY_IS_ONLINE to true)).build()
+//        )
+        viewModel.addDeviceOnline()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,12 +105,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        workManager.enqueueUniqueWork(
-            Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE,
-            oneTimeWorkReq
-                .setInputData(workDataOf(Constants.KEY_IS_ONLINE to false))
-                .build()
-        )
+//        workManager.enqueueUniqueWork(
+//            Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE,
+//            oneTimeWorkReq
+//                .setInputData(workDataOf(Constants.KEY_IS_ONLINE to false))
+//                .build()
+//        )
+        viewModel.removeDeviceOnline()
     }
 
     override fun onDestroy() {
