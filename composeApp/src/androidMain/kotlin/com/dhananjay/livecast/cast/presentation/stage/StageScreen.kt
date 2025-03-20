@@ -1,4 +1,4 @@
-package com.dhananjay.livecast.cast.stage
+package com.dhananjay.livecast.cast.presentation.stage
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,9 +67,9 @@ fun StageScreen(
             modifier = modifier.align(Alignment.TopCenter)
         ) {
             Text("Count:${state?.count ?: 0}")
-            if(state?.count != null && state.count > 0) {
+            if(state?.names.orEmpty().isNotEmpty()) {
                 LazyColumn {
-                    items(state.names) { device ->
+                    items(state!!.names) { device ->
                         Text(device)
                     }
                 }

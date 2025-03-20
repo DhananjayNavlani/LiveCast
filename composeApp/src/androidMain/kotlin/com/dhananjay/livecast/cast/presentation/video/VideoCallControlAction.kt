@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package com.dhananjay.livecast.cast.video
+package com.dhananjay.livecast.cast.presentation.video
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import com.dhananjay.livecast.R
-import com.dhananjay.livecast.cast.ui.Disabled
-import com.dhananjay.livecast.cast.ui.Primary
+import com.dhananjay.livecast.cast.presentation.ui.Disabled
+import com.dhananjay.livecast.cast.presentation.ui.Primary
 
 sealed class CallAction {
   data class ToggleMicroPhone(
@@ -33,9 +33,9 @@ sealed class CallAction {
     val isEnabled: Boolean
   ) : CallAction()
 
-  object FlipCamera : CallAction()
+  data object FlipCamera : CallAction()
 
-  object LeaveCall : CallAction()
+  data object LeaveCall : CallAction()
 }
 
 data class VideoCallControlAction(

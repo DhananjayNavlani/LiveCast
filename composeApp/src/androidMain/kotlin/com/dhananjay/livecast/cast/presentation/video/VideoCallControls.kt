@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.dhananjay.livecast.cast.video
+package com.dhananjay.livecast.cast.presentation.video
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,10 +34,10 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun VideoCallControls(
-  modifier: Modifier,
-  callMediaState: CallMediaState,
-  actions: List<VideoCallControlAction> = buildDefaultCallControlActions(callMediaState = callMediaState),
-  onCallAction: (CallAction) -> Unit
+    modifier: Modifier,
+    callMediaState: CallMediaState,
+    actions: List<VideoCallControlAction> = buildDefaultCallControlActions(callMediaState = callMediaState),
+    onCallAction: (CallAction) -> Unit
 ) {
   LazyRow(
     modifier = modifier.padding(bottom = 12.dp),

@@ -25,9 +25,9 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
-import com.dhananjay.livecast.cast.stage.StageScreen
+import com.dhananjay.livecast.cast.presentation.stage.StageScreen
+import com.dhananjay.livecast.cast.presentation.video.ScreenCastScreen
 import com.dhananjay.livecast.cast.utils.Constants
-import com.dhananjay.livecast.cast.video.ScreenCastScreen
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
 import org.koin.android.ext.android.inject
@@ -35,10 +35,11 @@ import org.koin.android.ext.android.inject
 class MainActivity : ComponentActivity() {
     private val sessionManager: WebRtcSessionManager by inject()
     private val workManager: WorkManager by inject()
-    private val oneTimeWorkReq = OneTimeWorkRequestBuilder<DeviceOnlineWorker>().setConstraints(
+    private val oneTimeWorkReq = OneTimeWorkRequestBuilder<DeviceOnlineWorker>()
+        .setConstraints(
             Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        ).setInputData(workDataOf(Constants.KEY_IS_ONLINE to true))
-        .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST).build()
+        )
+        .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
 
     private val captureLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -50,7 +51,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         workManager.enqueueUniqueWork(
-            Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE, oneTimeWorkReq
+            Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE, oneTimeWorkReq.setInputData(workDataOf(Constants.KEY_IS_ONLINE to true)).build()
         )
 
     }
@@ -85,15 +86,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
+    override fun onStop() {
+        super.onStop()
         workManager.enqueueUniqueWork(
             Constants.WORK_DEVICE_ONLINE, ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<DeviceOnlineWorker>().setConstraints(
-                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-            ).setInputData(workDataOf(Constants.KEY_IS_ONLINE to false))
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST).build()
+            oneTimeWorkReq
+                .setInputData(workDataOf(Constants.KEY_IS_ONLINE to false))
+                .build()
         )
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
         sessionManager.disconnect()
     }
 }

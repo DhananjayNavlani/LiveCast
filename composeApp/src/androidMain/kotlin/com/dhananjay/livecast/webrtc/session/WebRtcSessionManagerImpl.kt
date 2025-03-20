@@ -25,25 +25,15 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.projection.MediaProjection
 import android.os.Build
+import android.util.Log
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.content.getSystemService
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
-import androidx.work.WorkManager
-import androidx.work.workDataOf
-import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
-import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.connection.SignalingCommand
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnection
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import com.dhananjay.livecast.webrtc.peer.StreamPeerType
-import com.dhananjay.livecast.webrtc.utils.stringify
-import io.getstream.log.taggedLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -74,8 +64,7 @@ class WebRtcSessionManagerImpl(
     override val signalingClient: SignalingClient,
     override val peerConnectionFactory: StreamPeerConnectionFactory,
 ) : WebRtcSessionManager {
-    private val logger by taggedLogger("Call:LocalWebRtcSessionManager")
-
+    private val TAG = javaClass.simpleName
     private val sessionManagerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // used to send local video track to the fragment
@@ -243,7 +232,7 @@ class WebRtcSessionManagerImpl(
         localVideoTrackFlow.replayCache.forEach { videoTrack ->
             videoTrack.dispose()
         }
-        localAudioTrack.dispose()
+//        localAudioTrack.dispose()
         localVideoTrack.dispose()
 
         // dispose audio handler and video capturer.
@@ -262,7 +251,7 @@ class WebRtcSessionManagerImpl(
         result.onSuccess {
             signalingClient.sendCommand(SignalingCommand.OFFER, offer.description)
         }
-        logger.d { "[SDP] send offer: ${offer.stringify()}" }
+        Log.d(TAG,"[SDP] send offer: ${offer.type}" )
     }
 
     private suspend fun sendAnswer() {
@@ -274,22 +263,23 @@ class WebRtcSessionManagerImpl(
         result.onSuccess {
             signalingClient.sendCommand(SignalingCommand.ANSWER, answer.description)
         }
-        logger.d { "[SDP] send answer: ${answer.stringify()}" }
+        Log.d(TAG,"[SDP] send answer: ${answer.type}" )
     }
 
     private fun handleOffer(sdp: String) {
-        logger.d { "[SDP] handle offer: $sdp" }
+        Log.d(TAG,"[SDP] handle offer:" )
         offer = sdp
     }
 
     private suspend fun handleAnswer(sdp: String) {
-        logger.d { "[SDP] handle answer: $sdp" }
+        Log.d(TAG,"[SDP] handle answer: " )
         peerConnection.setRemoteDescription(
             SessionDescription(SessionDescription.Type.ANSWER, sdp)
         )
     }
 
     private suspend fun handleIce(iceMessage: String) {
+        Log.d(TAG, "handleIce: with message: ${iceMessage.length}")
         val iceArray = iceMessage.split(ICE_SEPARATOR)
         peerConnection.addIceCandidate(
             IceCandidate(
@@ -398,7 +388,7 @@ class WebRtcSessionManagerImpl(
     }
 
     private fun setupAudio() {
-        logger.d { "[setupAudio] #sfu; no args" }
+        Log.d(TAG,"[setupAudio] #sfu; no args" )
 //    audioHandler.start()
         audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
 
@@ -409,7 +399,7 @@ class WebRtcSessionManagerImpl(
             val device = devices.firstOrNull { it.type == deviceType } ?: return
 
             val isCommunicationDeviceSet = audioManager?.setCommunicationDevice(device)
-            logger.d { "[setupAudio] #sfu; isCommunicationDeviceSet: $isCommunicationDeviceSet" }
+            Log.d(TAG,"[setupAudio] #sfu; isCommunicationDeviceSet: $isCommunicationDeviceSet" )
         }
     }
 }

@@ -5,7 +5,6 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
-import com.google.firebase.firestore.FirebaseFirestore
 
 class DeviceOnlineWorker(
     private val appContext: Context,
@@ -15,10 +14,13 @@ class DeviceOnlineWorker(
 
     override suspend fun doWork(): Result {
 
-        val isOnline = inputData.getBoolean(Constants.KEY_IS_ONLINE, false) ?: false
+        val isOnline = inputData.getBoolean(Constants.KEY_IS_ONLINE, false)
+
         val result = if(isOnline){
             signalingClient.addDeviceOnline()
-        }else signalingClient.removeDeviceOnline()
+        }else {
+            signalingClient.removeDeviceOnline()
+        }
 
         return if(result){
             Result.success()

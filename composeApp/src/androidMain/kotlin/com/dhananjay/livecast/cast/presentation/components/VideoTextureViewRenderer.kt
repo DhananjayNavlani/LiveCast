@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.dhananjay.livecast.cast.components
+package com.dhananjay.livecast.cast.presentation.components
 
 import android.content.Context
 import android.content.res.Resources

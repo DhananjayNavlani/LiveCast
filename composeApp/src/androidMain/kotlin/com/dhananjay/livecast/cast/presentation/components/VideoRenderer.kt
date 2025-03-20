@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.dhananjay.livecast.cast.components
+package com.dhananjay.livecast.cast.presentation.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -71,8 +71,8 @@ fun VideoRenderer(
 }
 
 private fun cleanTrack(
-  view: VideoTextureViewRenderer?,
-  trackState: MutableState<VideoTrack?>
+    view: VideoTextureViewRenderer?,
+    trackState: MutableState<VideoTrack?>
 ) {
   view?.let { trackState.value?.removeSink(it) }
   trackState.value = null

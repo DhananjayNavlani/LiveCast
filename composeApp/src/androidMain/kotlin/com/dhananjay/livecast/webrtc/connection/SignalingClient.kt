@@ -17,6 +17,7 @@
 package com.dhananjay.livecast.webrtc.connection
 
 import android.os.Build
+import android.util.Log
 import com.dhananjay.livecast.cast.model.DeviceOnline
 import com.dhananjay.livecast.cast.model.Ice
 import com.dhananjay.livecast.cast.model.OfferAnswer
@@ -29,7 +30,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.toObject
-import io.getstream.log.taggedLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,7 +51,7 @@ import kotlin.coroutines.coroutineContext
 class SignalingClient(
     private val firestore: FirebaseFirestore
 ) {
-    private val logger by taggedLogger("Call:SignalingClient")
+    private val TAG = javaClass.simpleName
     private val signalingScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
 //  private val client = OkHttpClient()
@@ -77,7 +77,7 @@ class SignalingClient(
 
 
     // signaling commands to send commands to value pairs to the subscribers
-    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>()
+    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 1, extraBufferCapacity = 2)
     val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
 
     init {
@@ -87,11 +87,12 @@ class SignalingClient(
                 .limit(1)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
-                        logger.e { "Error fetching offer: $error" }
+                        Log.e(TAG,"Error fetching offer: $error" )
                         return@addSnapshotListener
                     }
 
                     snapshot.documentChanges.forEach { change ->
+                        Log.d(TAG, "The snapshot changes are ${change.document.id} ")
                         if (change.type == DocumentChange.Type.ADDED) {
                             callId = change.document.id
                         }
@@ -102,7 +103,9 @@ class SignalingClient(
                         callDoc!!.get().addOnSuccessListener {
                             it.toObject(OfferAnswer::class.java)?.let {
                                 if (it.isOffer) {
-                                    _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
+                                    Log.d(TAG,"Got an offer ${it.timestamp}" )
+                                    val result =  _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
+                                    Log.d(TAG, "Was offer emitted success ?: $result")
                                 }
                             }
                         }
@@ -117,7 +120,7 @@ class SignalingClient(
         val listener = firestore.collection("rooms").document("online")
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
-                    logger.e { "Error fetching offer: $error" }
+                    Log.e(TAG,"Error fetching offer: $error" )
                     return@addSnapshotListener
                 }
 
@@ -132,8 +135,8 @@ class SignalingClient(
     suspend fun addDeviceOnline(): Boolean {
         return try {
             firestore.collection("rooms").document("online").let {
-                val hasDevice =
-                    it.get().await().toObject<DeviceOnline>()?.devices?.contains(deviceId) ?: false
+                val hasDevice = it.get().await().toObject<DeviceOnline>()?.devices?.contains(deviceId) ?: false
+                Log.d(TAG, "addDeviceOnline: The collection has device ? $hasDevice")
                 if(!hasDevice){
                     it.set(
                         hashMapOf(
@@ -142,16 +145,15 @@ class SignalingClient(
                             "devices" to FieldValue.arrayUnion(deviceId)
                         ),
                         SetOptions.merge()
-                    ).await()
+                    )
                 }
-
 
             }
 
             true
         }catch (e: Exception){
             coroutineContext.ensureActive()
-            logger.e { "Error adding device online: $e" }
+            Log.e(TAG,"Error adding device online: $e" )
             false
         }
 
@@ -159,8 +161,8 @@ class SignalingClient(
     suspend fun removeDeviceOnline(): Boolean {
         return try {
             firestore.collection("rooms").document("online").let {
-                val hasDevice =
-                    it.get().await().toObject<DeviceOnline>()?.devices?.contains(deviceId) ?: false
+                val hasDevice = it.get().await().toObject<DeviceOnline>()?.devices?.contains(deviceId) ?: false
+                Log.d(TAG, "removeDeviceOnline: The collection has device ? $hasDevice")
                 if (hasDevice) {
                     it.set(
                         hashMapOf(
@@ -169,13 +171,13 @@ class SignalingClient(
                             "devices" to FieldValue.arrayRemove(deviceId)
                         ),
                         SetOptions.merge()
-                    ).await()
+                    )
                 }
             }
             true
         }catch (e: Exception){
             coroutineContext.ensureActive()
-            logger.e { "Error removing device online: $e" }
+            Log.e(TAG,"Error removing device online: $e" )
             false
         }
 
@@ -186,7 +188,7 @@ class SignalingClient(
         message: String,
         type: StreamPeerType = StreamPeerType.PUBLISHER
     ) {
-        logger.d { "[sendCommand] $signalingCommand $message $type" }
+        Log.d(TAG,"[sendCommand] $signalingCommand $type" )
 //    ws.send("$signalingCommand $message")
         when (signalingCommand) {
             SignalingCommand.STATE -> {
@@ -206,7 +208,7 @@ class SignalingClient(
                 //listen for remote answer
                 callDoc!!.addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
-                        logger.e { "Error fetching offer: $error" }
+                        Log.e(TAG,"Error fetching offer: $error" )
                         return@addSnapshotListener
                     }
 
@@ -220,7 +222,7 @@ class SignalingClient(
                 //listen for remote ice candidates
                 answerCandidates!!.addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
-                        logger.e { "Error fetching offer: $error" }
+                        Log.e(TAG,"Error fetching offer: $error" )
                         return@addSnapshotListener
                     }
 
@@ -253,7 +255,7 @@ class SignalingClient(
                         offerCandidates?.addSnapshotListener { snapshot, error ->
 
                             if (error != null || snapshot == null) {
-                                logger.e { "Error fetching offer: $error" }
+                                Log.e(TAG,"Error fetching offer: $error" )
                                 return@addSnapshotListener
                             }
 
@@ -317,7 +319,7 @@ class SignalingClient(
 
     private fun handleSignalingCommand(command: SignalingCommand, text: String) {
         val value = getSeparatedMessage(text)
-        logger.d { "received signaling: $command $value" }
+        Log.d(TAG,"received signaling: $command $value" )
         signalingScope.launch {
             _signalingCommandFlow.emit(command to value)
         }
