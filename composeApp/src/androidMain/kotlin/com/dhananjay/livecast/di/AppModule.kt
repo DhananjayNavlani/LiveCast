@@ -1,7 +1,9 @@
 package com.dhananjay.livecast.di
 
 import androidx.work.WorkManager
+import com.dhananjay.livecast.MainViewModel
 import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
+import com.dhananjay.livecast.cast.utils.NotificationHelper
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
@@ -10,6 +12,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import org.koin.androidx.workmanager.dsl.worker
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
+import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
@@ -19,7 +22,9 @@ val appModule = module {
     singleOf(::WebRtcSessionManagerImpl) {
         bind<WebRtcSessionManager>()
     }
-    worker { DeviceOnlineWorker(get(), get(), get()) }
+    singleOf(::NotificationHelper)
+    worker { DeviceOnlineWorker(get(),get(),get()) }
+    viewModel { MainViewModel() }
     single { WorkManager.getInstance(get()) }
 }
 

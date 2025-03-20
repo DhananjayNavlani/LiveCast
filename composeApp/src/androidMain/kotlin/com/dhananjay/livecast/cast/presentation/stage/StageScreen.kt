@@ -21,7 +21,8 @@ import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 @Composable
 fun StageScreen(
     state: DeviceOnline?,
-    onJoinCall: () -> Unit,
+    onStart: () -> Unit,
+    onAnswer: () -> Unit,
     modifier: Modifier = Modifier) {
 
     val sessionManager = LocalWebRtcSessionManager.current
@@ -64,7 +65,8 @@ fun StageScreen(
         }*/
 
         Column(
-            modifier = modifier.align(Alignment.TopCenter)
+            modifier = modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Count:${state?.count ?: 0}")
             if(state?.names.orEmpty().isNotEmpty()) {
@@ -75,12 +77,17 @@ fun StageScreen(
                 }
 
             }
-        }
-        Button(onClick = {
-            onJoinCall()
-        },
-            modifier = Modifier.align(Alignment.Center)) {
-            Text(text = "Start Session")
+            Button(onClick = {
+                onStart()
+            },) {
+                Text(text = "Start Session")
+            }
+
+            Button(
+                onClick = onAnswer,
+            ) {
+                Text("Answer Call")
+            }
         }
     }
 

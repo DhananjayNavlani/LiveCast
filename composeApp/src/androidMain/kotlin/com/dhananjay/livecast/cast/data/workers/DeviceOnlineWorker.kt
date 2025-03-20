@@ -25,7 +25,7 @@ class DeviceOnlineWorker(
         return if(result){
             Result.success()
         }else{
-            Result.failure()
+            Result.retry()
         }
     }
 }

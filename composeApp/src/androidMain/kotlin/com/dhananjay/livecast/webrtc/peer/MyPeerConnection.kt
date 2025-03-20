@@ -1,5 +1,6 @@
 package com.dhananjay.livecast.webrtc.peer
 
+import android.util.Log
 import com.dhananjay.livecast.webrtc.utils.createValue
 import com.dhananjay.livecast.webrtc.utils.setValue
 import com.dhananjay.livecast.webrtc.utils.stringify
@@ -264,6 +265,7 @@ class StreamPeerConnection(
 
     override fun onTrack(transceiver: RtpTransceiver?) {
         logger.i { "[onTrack] #sfu; #$typeTag; transceiver: $transceiver" }
+        Log.d("Unknown", "onTrack: The recevier ${transceiver?.receiver}")
         onVideoTrack?.invoke(transceiver)
     }
 

@@ -2,29 +2,38 @@ package com.dhananjay.livecast.cast.presentation.video
 
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import com.dhananjay.livecast.cast.presentation.components.VideoRenderer
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 
 
 @Composable
-fun ScreenCastScreen(onCapture: () -> Unit) {
+fun ScreenCastScreen(
+    isSubscriber: Boolean,
+    onEnd:() -> Unit) {
     val sessionManager = LocalWebRtcSessionManager.current
+    val isSub by rememberUpdatedState(isSubscriber)
 
     LaunchedEffect(key1 = Unit) {
-        sessionManager.onSessionScreenReady()
+        sessionManager.onSessionScreenReady(isSub)
     }
 
     Box(
@@ -35,8 +44,8 @@ fun ScreenCastScreen(onCapture: () -> Unit) {
         val remoteVideoTrackState by sessionManager.remoteVideoTrackFlow.collectAsState(null)
         val remoteVideoTrack = remoteVideoTrackState
 
-        /*val localVideoTrackState by sessionManager.localVideoTrackFlow.collectAsState(null)
-        val localVideoTrack = localVideoTrackState*/
+        val localVideoTrackState by sessionManager.localVideoTrackFlow.collectAsState(null)
+        val localVideoTrack = localVideoTrackState
 
         var callMediaState by remember { mutableStateOf(CallMediaState()) }
 
@@ -49,7 +58,7 @@ fun ScreenCastScreen(onCapture: () -> Unit) {
             )
         }
 
-/*        if (localVideoTrack != null && callMediaState.isCameraEnabled) {
+        if (localVideoTrack != null && !isSub) {
             FloatingVideoRenderer(
                 modifier = Modifier
                     .size(width = 150.dp, height = 210.dp)
@@ -59,7 +68,7 @@ fun ScreenCastScreen(onCapture: () -> Unit) {
                 parentBounds = parentSize,
                 paddingValues = PaddingValues(0.dp)
             )
-        }*/
+        }
 
         val activity = LocalActivity.current
 
@@ -73,17 +82,19 @@ fun ScreenCastScreen(onCapture: () -> Unit) {
                     is CallAction.ToggleMicroPhone -> {
                         val enabled = callMediaState.isMicrophoneEnabled.not()
                         callMediaState = callMediaState.copy(isMicrophoneEnabled = enabled)
-                        sessionManager.enableMicrophone(enabled)
+//                        sessionManager.enableMicrophone(enabled)
                     }
                     is CallAction.ToggleCamera -> {
                         val enabled = callMediaState.isCameraEnabled.not()
                         callMediaState = callMediaState.copy(isCameraEnabled = enabled)
-                        sessionManager.enableCamera(enabled)
+//                        sessionManager.enableCamera(enabled)
                     }
-                    CallAction.FlipCamera -> sessionManager.flipCamera()
+                    CallAction.FlipCamera -> {
+//                        sessionManager.flipCamera()
+                    }
                     CallAction.LeaveCall -> {
-                        sessionManager.disconnect()
-                        activity?.finish()
+                        sessionManager.disconnect(isSub)
+                        onEnd()
                     }
                 }
             }

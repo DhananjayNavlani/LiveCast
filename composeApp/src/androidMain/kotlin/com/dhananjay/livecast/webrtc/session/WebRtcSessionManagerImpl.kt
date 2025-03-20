@@ -80,16 +80,16 @@ class WebRtcSessionManagerImpl(
     private val mediaConstraints = MediaConstraints().apply {
         mandatory.addAll(
             listOf(
-                MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"),
+                MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"),
                 MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true")
             )
         )
     }
 
     // getting front camera
-    private val videoCapturer: VideoCapturer by lazy {
+/*    private val videoCapturer: VideoCapturer by lazy {
         buildCameraCapturer()
-    }
+    }*/
     private val cameraManager by lazy { context.getSystemService<CameraManager>() }
     private val cameraEnumerator: Camera2Enumerator by lazy {
         Camera2Enumerator(context)
@@ -112,10 +112,14 @@ class WebRtcSessionManagerImpl(
         peerConnectionFactory.eglBaseContext
     )
 
+    private lateinit var videoCapturer: VideoCapturer
     private val videoSource by lazy {
+        if(!::videoCapturer.isInitialized) error("VideoCapturer was not initialized!")
+        Log.d(TAG, "The videoCap is : ${videoCapturer.isScreencast}")
         peerConnectionFactory.makeVideoSource(videoCapturer.isScreencast).apply {
             videoCapturer.initialize(surfaceTextureHelper, context, this.capturerObserver)
-            videoCapturer.startCapture(resolution.width, resolution.height, 30)
+            val displayMetrics = context.resources.displayMetrics
+            videoCapturer.startCapture(displayMetrics.widthPixels, displayMetrics.heightPixels, 30)
         }
     }
 
@@ -171,6 +175,7 @@ class WebRtcSessionManagerImpl(
                 if (track.kind() == MediaStreamTrack.VIDEO_TRACK_KIND) {
                     val videoTrack = track as VideoTrack
                     sessionManagerScope.launch {
+                        Log.d(TAG, "Getting video track : ${videoTrack.id()}")
                         _remoteVideoTrackFlow.emit(videoTrack)
                     }
                 }
@@ -192,13 +197,17 @@ class WebRtcSessionManagerImpl(
         }
     }
 
-    override fun onSessionScreenReady() {
+    override fun onSessionScreenReady(isSubscriber: Boolean) {
 //    setupAudio()
-//    peerConnection.connection.addTrack(localVideoTrack)
 //    peerConnection.connection.addTrack(localAudioTrack)
+        if (!isSubscriber){
+            peerConnection.connection.addTrack(localVideoTrack)
+        }
         sessionManagerScope.launch {
             // sending local video track to show local video from start
-//      _localVideoTrackFlow.emit(localVideoTrack)
+            if (!isSubscriber){
+                _localVideoTrackFlow.emit(localVideoTrack)
+            }
 
             if (offer != null) {
                 sendAnswer()
@@ -224,7 +233,7 @@ class WebRtcSessionManagerImpl(
         }
     }
 
-    override fun disconnect() {
+    override fun disconnect(isSubscriber: Boolean) {
         // dispose audio & video tracks.
         remoteVideoTrackFlow.replayCache.forEach { videoTrack ->
             videoTrack.dispose()
@@ -233,12 +242,15 @@ class WebRtcSessionManagerImpl(
             videoTrack.dispose()
         }
 //        localAudioTrack.dispose()
-        localVideoTrack.dispose()
+
+        if(!isSubscriber) {
+            localVideoTrack.dispose()
+            videoCapturer.stopCapture()
+            videoCapturer.dispose()
+        }
 
         // dispose audio handler and video capturer.
 //    audioHandler.stop()
-        videoCapturer.stopCapture()
-        videoCapturer.dispose()
 
         // dispose signaling clients and socket.
 
@@ -291,41 +303,40 @@ class WebRtcSessionManagerImpl(
     }
 
     override fun handleScreenSharing(data: Intent) {
-        val videoCapturer = ScreenCapturerAndroid(data, object : MediaProjection.Callback() {
+        videoCapturer = ScreenCapturerAndroid(data, object : MediaProjection.Callback() {
             override fun onStop() {
                 super.onStop()
-
             }
+        })
 
-        }).apply {
-            val source = peerConnectionFactory.makeVideoSource(true)
-            initialize(surfaceTextureHelper, context, source.capturerObserver)
+        /*      .apply {
+                    val source = peerConnectionFactory.makeVideoSource(true)
+                    initialize(surfaceTextureHelper, context, source.capturerObserver)
+                }
 
-        }
 
+                // Get screen dimensions
+                val displayMetrics = context.resources.displayMetrics
+                videoCapturer.startCapture(displayMetrics.widthPixels, displayMetrics.heightPixels, 30)
 
-        // Get screen dimensions
-        val displayMetrics = context.resources.displayMetrics
-        videoCapturer.startCapture(displayMetrics.widthPixels, displayMetrics.heightPixels, 30)
+                // Create and add video track
+                val screenVideoTrack = peerConnectionFactory.makeVideoTrack(
+                    source = videoSource,
+                    trackId = "ScreenVideo${UUID.randomUUID()}"
+                )
 
-        // Create and add video track
-        val screenVideoTrack = peerConnectionFactory.makeVideoTrack(
-            source = videoSource,
-            trackId = "ScreenVideo${UUID.randomUUID()}"
-        )
-
-        // Update the local video track
-        sessionManagerScope.launch {
-            _localVideoTrackFlow.emit(screenVideoTrack)
-        }
-
-        // Add to peer connection (remove existing tracks first)
-        peerConnection.connection.senders.forEach { sender ->
+                // Update the local video track
+                sessionManagerScope.launch {
+                    _localVideoTrackFlow.emit(screenVideoTrack)
+                }
+                peerConnection.connection.senders.forEach { sender ->
             if (sender.track()?.kind() == MediaStreamTrack.VIDEO_TRACK_KIND) {
                 peerConnection.connection.removeTrack(sender)
             }
         }
-        peerConnection.connection.addTrack(screenVideoTrack)
+        peerConnection.connection.addTrack(localVideoTrack)
+
+        */
 
     }
 
