@@ -166,6 +166,7 @@ class WebRtcSessionManagerImpl(
             type = StreamPeerType.SUBSCRIBER,
             mediaConstraints = mediaConstraints,
             onIceCandidateRequest = { iceCandidate, type ->
+                Log.d(TAG, "The iceCandidate type: $type is ${iceCandidate.serverUrl}")
                 signalingClient.sendCommand(
                     SignalingCommand.ICE,
                     "${iceCandidate.sdpMid}$ICE_SEPARATOR${iceCandidate.sdpMLineIndex}$ICE_SEPARATOR${iceCandidate.sdp}",

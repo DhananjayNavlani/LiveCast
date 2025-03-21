@@ -77,7 +77,7 @@ class SignalingClient(
 
 
     // signaling commands to send commands to value pairs to the subscribers
-    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 1, extraBufferCapacity = 2)
+    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 10, extraBufferCapacity = 100)
     val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
 
     init {
@@ -348,6 +348,48 @@ class SignalingClient(
 
 //    ws.cancel()
     }
+
+    suspend fun testRead() {
+        firestore.collection("rooms").document("online")
+            .let {
+                it.get().addOnSuccessListener{
+                    Log.d(TAG, "testRead: The success listener ${it.id}")
+                }.addOnFailureListener{
+                    Log.d(TAG, "testRead: The failure listener ${it.message}")
+                }
+                val id = it.get().await().id
+                Log.d(TAG, "testRead: Getting await data -> $id")
+            }
+    }
+
+    suspend fun testWrite() {
+        firestore.collection("rooms").document("test").let {
+            it.set(
+                hashMapOf(
+                    "count" to 1,
+                    "devices" to listOf(deviceId)
+                )
+            ).addOnSuccessListener {
+                Log.d(TAG, "testWrite: The success listener ${it}")
+            }.addOnFailureListener {
+                Log.d(TAG, "testWrite: The failure listener ${it.message}")
+            }
+
+            Log.d(TAG, "testWrite: Before await()")
+           it.set(
+                hashMapOf(
+                    "count" to 2,
+                    "devices" to listOf(deviceId)
+                ),
+                SetOptions.merge()
+            ).await()
+            Log.d(TAG, "testWrite: After await()")
+
+
+        }
+
+    }
+
 }
 
 enum class WebRTCSessionState {

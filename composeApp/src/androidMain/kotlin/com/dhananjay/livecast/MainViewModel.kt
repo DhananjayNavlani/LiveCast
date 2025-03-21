@@ -26,8 +26,17 @@ class MainViewModel(private val signalingClient: SignalingClient): ViewModel() {
 
     fun addDeviceOnline() {
         viewModelScope.launch(Dispatchers.IO) {
+            testRead()
+            testWrite()
             signalingClient.addDeviceOnline()
         }
+    }
+
+    private suspend fun testRead() {
+        signalingClient.testRead()
+    }
+    private suspend fun testWrite() {
+        signalingClient.testWrite()
     }
 
     fun removeDeviceOnline(){

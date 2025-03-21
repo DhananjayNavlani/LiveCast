@@ -35,9 +35,10 @@ stream-log-android = { group = "io.getstream", name = "stream-log-android", vers
 
 firebase-android-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-android" }
 firebase-auth-ui = { group = "com.firebaseui", name = "firebase-ui-auth", version.ref = "firebase-auth-ui" }
-firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore-ktx" }
-firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx" }
-firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics-ktx" }
+firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
+firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
 
 koin-bom = { group = "io.insert-koin", name = "koin-bom", version.ref = "koin" }
 koin-core = { group = "io.insert-koin", name = "koin-core" }
@@ -57,4 +58,4 @@ lumo = {id = "com.nomanr.plugin.lumo", version.ref = "lumo"}
 
 [bundles]
 webrtc-android = ["webrtc-android-bom", "webrtc-android", "webrtc-android-ui", "webrtc-compose", "webrtc-ktx"]
-firebase-android = [ "firebase-firestore", "firebase-auth", "firebase-crashlytics"]
+firebase-android = [ "firebase-firestore", "firebase-auth", "firebase-crashlytics", "firebase-analytics"]
