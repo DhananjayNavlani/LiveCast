@@ -77,7 +77,7 @@ class SignalingClient(
 
 
     // signaling commands to send commands to value pairs to the subscribers
-    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 10, extraBufferCapacity = 100)
+    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 10, extraBufferCapacity = 20)
     val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
 
     init {
@@ -92,7 +92,7 @@ class SignalingClient(
                     }
 
                     snapshot.documentChanges.forEach { change ->
-                        Log.d(TAG, "The snapshot changes are ${change.document.id} ")
+                        Log.d(TAG, "The snapshot changes are ${change.document.id} type = ${change.type}, isOffer ${change.document.get("offer")} ")
                         if (change.type == DocumentChange.Type.ADDED) {
                             callId = change.document.id
                         }
@@ -103,9 +103,8 @@ class SignalingClient(
                         callDoc!!.get().addOnSuccessListener {
                             it.toObject(OfferAnswer::class.java)?.let {
                                 if (it.isOffer) {
-                                    Log.d(TAG,"Got an offer ${it.timestamp}" )
-                                    val result =  _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
-                                    Log.d(TAG, "Was offer emitted success ?: $result")
+                                    Log.d(TAG, "Got offer with $callId: & ${it.timestamp}")
+                                     _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
                                 }
                             }
                         }
@@ -167,7 +166,7 @@ class SignalingClient(
                 val deviceOnline = it.get().await().takeIf { it.exists() }?.toObject<DeviceOnline>()
                 val hasDevice = deviceOnline?.devices?.contains(deviceId) ?: false
 
-                Log.d(TAG, "removeDeviceOnline: The collection has device ? $deviceOnline")
+                Log.d(TAG, "removeDeviceOnline: The collection has device ? $deviceOnline  && hasDevice $hasDevice")
                 if (hasDevice) {
                     var count = deviceOnline?.count?.coerceAtLeast(1) ?: 1
                     it.set(
@@ -335,17 +334,6 @@ class SignalingClient(
 
     fun dispose() {
 //        _sessionStateFlow.value = WebRTCSessionState.Offline
-        signalingScope.launch {
-            firestore.collection("rooms").document("online").set(
-                hashMapOf(
-                    "count" to FieldValue.increment(-1),
-                    "devices" to FieldValue.arrayRemove("${Build.DEVICE}_${Build.MANUFACTURER}")
-                ),
-                SetOptions.merge()
-            ).await()
-        }
-        signalingScope.coroutineContext.cancelChildren()
-
 //    ws.cancel()
     }
 
@@ -362,7 +350,7 @@ class SignalingClient(
             }
     }
 
-    suspend fun testWrite() {
+    fun testWrite() {
         firestore.collection("rooms").document("test").let {
             it.set(
                 hashMapOf(
@@ -382,7 +370,7 @@ class SignalingClient(
                     "devices" to listOf(deviceId)
                 ),
                 SetOptions.merge()
-            ).await()
+            )
             Log.d(TAG, "testWrite: After await()")
 
 

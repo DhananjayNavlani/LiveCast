@@ -22,14 +22,16 @@ class ScreenSharingService : Service(), KoinComponent {
             groupKey = Constants.GROUP_KEY_APP,
             autoCancel = true
         ).build()
-
         startForeground(id,notification)
+
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
         intent?.let {
             when (it.action) {
                 Constants.ACTION_START_SCREEN_SHARING -> {
+
                     // Start screen sharing
                 }
                 Constants.ACTION_STOP_SCREEN_SHARING -> {

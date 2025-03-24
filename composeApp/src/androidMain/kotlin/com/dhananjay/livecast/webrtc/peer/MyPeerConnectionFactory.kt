@@ -45,7 +45,11 @@ class StreamPeerConnectionFactory constructor(
     val rtcConfig = PeerConnection.RTCConfiguration(
         arrayListOf(
             // adding google's standard server
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun.openrelay.metered.ca:80").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun.services.mozilla.com").createIceServer()
         )
     ).apply {
         // it's very important to use new unified sdp semantics PLAN_B is deprecated

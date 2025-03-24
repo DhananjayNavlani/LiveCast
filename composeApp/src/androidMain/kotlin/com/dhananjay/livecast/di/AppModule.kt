@@ -13,6 +13,7 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestore
 import org.koin.androidx.workmanager.dsl.worker
 import org.koin.core.module.dsl.bind
+import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -23,7 +24,7 @@ val appModule = module {
     single { FirebaseAnalytics.getInstance(get()) }
     singleOf(::SignalingClient)
     singleOf(::StreamPeerConnectionFactory)
-    singleOf(::WebRtcSessionManagerImpl) {
+    factoryOf(::WebRtcSessionManagerImpl) {
         bind<WebRtcSessionManager>()
     }
     singleOf(::NotificationHelper)
