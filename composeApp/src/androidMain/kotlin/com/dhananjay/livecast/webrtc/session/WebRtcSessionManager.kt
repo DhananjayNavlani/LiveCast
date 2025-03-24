@@ -17,12 +17,15 @@
 package com.dhananjay.livecast.webrtc.session
 
 import android.content.Intent
+import androidx.compose.ui.geometry.Offset
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import kotlinx.coroutines.flow.SharedFlow
 import org.webrtc.VideoTrack
 
 interface WebRtcSessionManager {
+
+  var isSubscriber: Boolean
 
   val signalingClient: SignalingClient
 
@@ -34,13 +37,15 @@ interface WebRtcSessionManager {
 
   fun onSessionScreenReady(isSubscriber: Boolean)
 
+  fun sendEvent(event: Offset)
+
   fun flipCamera()
 
   fun enableMicrophone(enabled: Boolean)
 
   fun enableCamera(enabled: Boolean)
 
-  fun disconnect(isSubscriber: Boolean)
+  fun disconnect()
 
   fun handleScreenSharing(data: Intent)
 }

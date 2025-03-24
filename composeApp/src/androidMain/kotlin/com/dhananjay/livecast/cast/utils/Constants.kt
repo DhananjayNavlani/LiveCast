@@ -1,6 +1,7 @@
 package com.dhananjay.livecast.cast.utils
 
 object Constants {
+    const val ACTION_SEND_EVENT= "action_send_event"
     const val DATA_CHANNEL_KEY = "data_channel_key"
     const val WORK_DEVICE_ONLINE = "WORK_DEVICE_ONLINE"
     const val KEY_IS_ONLINE = "isOnline"

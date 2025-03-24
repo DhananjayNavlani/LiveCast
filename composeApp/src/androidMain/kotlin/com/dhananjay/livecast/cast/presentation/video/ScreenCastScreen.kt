@@ -1,6 +1,7 @@
 package com.dhananjay.livecast.cast.presentation.video
 
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -37,6 +39,20 @@ fun ScreenCastScreen(
 
     Box(
         modifier = Modifier.fillMaxSize()
+            .pointerInput(sessionManager){
+                detectTapGestures(onDoubleTap = {
+                    sessionManager.sendEvent(it)
+                },
+                    onLongPress = {
+                        sessionManager.sendEvent(it)
+                    },
+                    onPress = {
+                        sessionManager.sendEvent(it)
+                    }
+                    ) {
+                    sessionManager.sendEvent(it)
+                }
+            }
     ) {
         var parentSize: IntSize by remember { mutableStateOf(IntSize(0, 0)) }
 
@@ -92,7 +108,7 @@ fun ScreenCastScreen(
 //                        sessionManager.flipCamera()
                     }
                     CallAction.LeaveCall -> {
-                        sessionManager.disconnect(isSub)
+                        sessionManager.disconnect()
                         activity?.finish()
                     }
                 }

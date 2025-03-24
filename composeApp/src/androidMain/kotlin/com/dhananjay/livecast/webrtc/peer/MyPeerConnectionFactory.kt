@@ -6,7 +6,7 @@ import io.getstream.log.taggedLogger
 import kotlinx.coroutines.CoroutineScope
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
-import org.webrtc.DataChannel.Observer
+import org.webrtc.DataChannel
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.EglBase
 import org.webrtc.HardwareVideoEncoderFactory
@@ -189,7 +189,7 @@ class StreamPeerConnectionFactory constructor(
         onNegotiationNeeded: ((StreamPeerConnection, StreamPeerType) -> Unit)? = null,
         onIceCandidateRequest: ((IceCandidate, StreamPeerType) -> Unit)? = null,
         onVideoTrack: ((RtpTransceiver?) -> Unit)? = null,
-        dataChannelObserver: Observer
+        onDataChannel: ((DataChannel) -> Unit)? = null,
     ): StreamPeerConnection {
         val peerConnection = StreamPeerConnection(
             coroutineScope = coroutineScope,
@@ -199,7 +199,7 @@ class StreamPeerConnectionFactory constructor(
             onNegotiationNeeded = onNegotiationNeeded,
             onIceCandidate = onIceCandidateRequest,
             onVideoTrack = onVideoTrack,
-            dataChannelObserver = dataChannelObserver,
+            onDataChannel = onDataChannel
         )
         val connection = makePeerConnectionInternal(
             configuration = configuration,

@@ -28,7 +28,9 @@ import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
 import androidx.core.content.getSystemService
+import com.dhananjay.livecast.cast.data.services.AccessibilityService
 import com.dhananjay.livecast.cast.data.services.ScreenSharingService
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
@@ -90,6 +92,8 @@ class WebRtcSessionManagerImpl(
             )
         )
     }
+
+    override var isSubscriber: Boolean = false
 
     // getting front camera
 /*    private val videoCapturer: VideoCapturer by lazy {
@@ -192,21 +196,38 @@ class WebRtcSessionManagerImpl(
                     }
                 }
             },
-            dataChannelObserver = object : DataChannel.Observer{
-                override fun onBufferedAmountChange(p0: Long) {
-                    Log.d(TAG, "onBufferedAmountChange: For DataChannel $p0")
-                }
+            onDataChannel = {
+                Log.d(TAG, "onDataChannel: ${it} is subscriber ? $isSubscriber")
+                if (!isSubscriber){
+                    it.registerObserver(object : DataChannel.Observer {
+                        override fun onBufferedAmountChange(p0: Long) {
+                            Log.d(TAG, "onBufferedAmountChange: $p0")
+                        }
 
-                override fun onStateChange() {
-                    Log.d(TAG, "onStateChange: For DataChannel")
-                }
+                        override fun onStateChange() {
+                            Log.d(TAG, "onStateChange: ${dataChannel.state()} => ${it.id()}")
+                        }
 
-                override fun onMessage(p0: DataChannel.Buffer) {
-                    val data = p0.data
-                    val byteArray = ByteArray(data.remaining())
-                    data.get(byteArray)
-                    val message = String(byteArray, Charsets.UTF_8)
-                    Log.d(TAG, "onMessage: For DataChannel $message")
+                        override fun onMessage(buffer: DataChannel.Buffer) {
+                            val data = buffer.data
+                            val byteArray = ByteArray(data.remaining())
+                            data.get(byteArray)
+                            val offset = String(byteArray, Charsets.UTF_8).split(" ").takeIf { it.size == 2 }?.let {
+                                Offset(it[0].toFloat(), it[1].toFloat())
+                            } ?: run {
+                                Log.d(TAG, "onMessage: The message is not valid")
+                                return
+                            }
+                            Log.d(TAG, "onMessage: The offset is $offset")
+                            Intent(context, AccessibilityService::class.java).apply {
+                                action = Constants.ACTION_SEND_EVENT
+                                putExtra("x", offset.x)
+                                putExtra("y", offset.y)
+                            }.also {
+                                context.startService(it)
+                            }
+                        }
+                    })
                 }
 
             }
@@ -237,23 +258,36 @@ class WebRtcSessionManagerImpl(
     override fun onSessionScreenReady(isSubscriber: Boolean) {
 //    setupAudio()
 //    peerConnection.connection.addTrack(localAudioTrack)
+        this.isSubscriber = isSubscriber
+        dataChannel = peerConnection.connection.createDataChannel(Constants.DATA_CHANNEL_KEY, DataChannel.Init().apply {
+            negotiated = true
+            ordered = true
+            id = 0
+        } )
         sessionManagerScope.launch {
             // sending local video track to show local video from start
             if (isSubscriber) {
                 sendOffer()
-                dataChannel = peerConnection.connection.createDataChannel(Constants.DATA_CHANNEL_KEY, DataChannel.Init() )
-                dataChannel.send(
-                    DataChannel.Buffer(
-                        ByteBuffer.wrap("Hello from the other side".toByteArray(Charsets.UTF_8)),
-                        false
-                    )
-                )
             } else {
                 peerConnection.connection.addTrack(localVideoTrack)
                 _localVideoTrackFlow.emit(localVideoTrack)
                 sendAnswer()
             }
         }
+    }
+
+    override fun sendEvent(event: Offset) {
+        if(!isSubscriber){
+            Log.d(TAG, "sendEvent: not a subscriber")
+            return
+        }
+        Log.d(TAG, "sendEvent: The event is $event")
+        dataChannel.send(
+            DataChannel.Buffer(
+                ByteBuffer.wrap("${event.x} ${event.y}".toByteArray(Charsets.UTF_8)),
+                false
+            )
+        )
     }
 
     override fun flipCamera() {
@@ -272,7 +306,7 @@ class WebRtcSessionManagerImpl(
         }
     }
 
-    override fun disconnect(isSubscriber: Boolean) {
+    override fun disconnect() {
         // dispose audio & video tracks.
         remoteVideoTrackFlow.replayCache.forEach { videoTrack ->
             videoTrack.dispose()

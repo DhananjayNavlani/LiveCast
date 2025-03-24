@@ -1,7 +1,9 @@
 package com.dhananjay.livecast
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.os.Bundle
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dhananjay.livecast.cast.data.services.AccessibilityService
 import com.dhananjay.livecast.cast.presentation.stage.StageScreen
 import com.dhananjay.livecast.cast.presentation.video.VideoScreenActivity
 import com.dhananjay.livecast.cast.utils.Constants
@@ -24,12 +27,22 @@ import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
     private val viewModel by inject<MainViewModel>()
-
+    private val accessibilityManager: AccessibilityManager by lazy {
+        getSystemService(AccessibilityManager::class.java)
+    }
     private val TAG = javaClass.simpleName
 
+    private fun isAccessibilityEnabled() = accessibilityManager.getEnabledAccessibilityServiceList(
+        AccessibilityServiceInfo.FEEDBACK_GENERIC
+    ).any {
+        it.resolveInfo.serviceInfo.run { "$packageName/$name" } == "${packageName}/${AccessibilityService::class.java.name}"
+    }
     override fun onStart() {
         super.onStart()
         viewModel.addDeviceOnline()
+//        if(!isAccessibilityEnabled()) {
+//            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+//        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
