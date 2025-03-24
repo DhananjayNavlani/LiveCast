@@ -41,11 +41,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.webrtc.AudioTrack
 import org.webrtc.Camera2Capturer
 import org.webrtc.Camera2Enumerator
 import org.webrtc.CameraEnumerationAndroid
+import org.webrtc.DataChannel
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.MediaStreamTrack
@@ -54,6 +56,7 @@ import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoCapturer
 import org.webrtc.VideoTrack
+import java.nio.ByteBuffer
 import java.util.UUID
 
 const val ICE_SEPARATOR = '$'
@@ -92,6 +95,7 @@ class WebRtcSessionManagerImpl(
 /*    private val videoCapturer: VideoCapturer by lazy {
         buildCameraCapturer()
     }*/
+
     private val cameraManager by lazy { context.getSystemService<CameraManager>() }
     private val cameraEnumerator: Camera2Enumerator by lazy {
         Camera2Enumerator(context)
@@ -114,6 +118,7 @@ class WebRtcSessionManagerImpl(
         peerConnectionFactory.eglBaseContext
     )
 
+    private lateinit var dataChannel: DataChannel
     private lateinit var videoCapturer: VideoCapturer
     private val videoSource by lazy {
         if(!::videoCapturer.isInitialized) error("VideoCapturer was not initialized!")
@@ -166,11 +171,15 @@ class WebRtcSessionManagerImpl(
             type = StreamPeerType.SUBSCRIBER,
             mediaConstraints = mediaConstraints,
             onIceCandidateRequest = { iceCandidate, type ->
-                Log.d(TAG, "The iceCandidate type: $type is ${iceCandidate.serverUrl}")
+                Log.d(TAG, "The iceCandidate type: $type is offer null ? ${offer == null} ")
                 signalingClient.sendCommand(
                     SignalingCommand.ICE,
                     "${iceCandidate.sdpMid}$ICE_SEPARATOR${iceCandidate.sdpMLineIndex}$ICE_SEPARATOR${iceCandidate.sdp}",
-                    type
+                    if(offer == null) {
+                        StreamPeerType.SUBSCRIBER
+                    } else {
+                        StreamPeerType.PUBLISHER
+                    }
                 )
             },
             onVideoTrack = { rtpTransceiver ->
@@ -182,6 +191,24 @@ class WebRtcSessionManagerImpl(
                         _remoteVideoTrackFlow.emit(videoTrack)
                     }
                 }
+            },
+            dataChannelObserver = object : DataChannel.Observer{
+                override fun onBufferedAmountChange(p0: Long) {
+                    Log.d(TAG, "onBufferedAmountChange: For DataChannel $p0")
+                }
+
+                override fun onStateChange() {
+                    Log.d(TAG, "onStateChange: For DataChannel")
+                }
+
+                override fun onMessage(p0: DataChannel.Buffer) {
+                    val data = p0.data
+                    val byteArray = ByteArray(data.remaining())
+                    data.get(byteArray)
+                    val message = String(byteArray, Charsets.UTF_8)
+                    Log.d(TAG, "onMessage: For DataChannel $message")
+                }
+
             }
         )
     }
@@ -198,24 +225,33 @@ class WebRtcSessionManagerImpl(
                     }
                 }
         }
+
+        sessionManagerScope.launch {
+            //capture the stats from peerConnection
+            peerConnection.getStats().collectLatest {
+                Log.d(TAG, "$it")
+            }
+        }
     }
 
     override fun onSessionScreenReady(isSubscriber: Boolean) {
 //    setupAudio()
 //    peerConnection.connection.addTrack(localAudioTrack)
-        if (!isSubscriber){
-            peerConnection.connection.addTrack(localVideoTrack)
-        }
         sessionManagerScope.launch {
             // sending local video track to show local video from start
-            if (!isSubscriber){
-                _localVideoTrackFlow.emit(localVideoTrack)
-            }
-
-            if (offer != null) {
-                sendAnswer()
-            } else {
+            if (isSubscriber) {
                 sendOffer()
+                dataChannel = peerConnection.connection.createDataChannel(Constants.DATA_CHANNEL_KEY, DataChannel.Init() )
+                dataChannel.send(
+                    DataChannel.Buffer(
+                        ByteBuffer.wrap("Hello from the other side".toByteArray(Charsets.UTF_8)),
+                        false
+                    )
+                )
+            } else {
+                peerConnection.connection.addTrack(localVideoTrack)
+                _localVideoTrackFlow.emit(localVideoTrack)
+                sendAnswer()
             }
         }
     }
@@ -253,19 +289,19 @@ class WebRtcSessionManagerImpl(
             Intent(context, ScreenSharingService::class.java).apply {
                 action = Constants.ACTION_STOP_SCREEN_SHARING
             }.also {
-                context.startForegroundService(it)
+                context.startService(it)
             }
         }
 
         // dispose audio handler and video capturer.
-//    audioHandler.stop()
-
+        // audioHandler.stop()
         // dispose signaling clients and socket.
 
         signalingClient.dispose()
     }
 
     private suspend fun sendOffer() {
+        offer = null
         val offer = peerConnection.createOffer().getOrThrow()
         val result = peerConnection.setLocalDescription(offer)
         result.onSuccess {
@@ -317,31 +353,10 @@ class WebRtcSessionManagerImpl(
             }
         })
 
-        /*      .apply {
-                    val source = peerConnectionFactory.makeVideoSource(true)
-                    initialize(surfaceTextureHelper, context, source.capturerObserver)
-                }
-
-
-                // Get screen dimensions
-                val displayMetrics = context.resources.displayMetrics
-                videoCapturer.startCapture(displayMetrics.widthPixels, displayMetrics.heightPixels, 30)
-
-                // Create and add video track
-                val screenVideoTrack = peerConnectionFactory.makeVideoTrack(
-                    source = videoSource,
-                    trackId = "ScreenVideo${UUID.randomUUID()}"
-                )
-
-                // Update the local video track
-                sessionManagerScope.launch {
-                    _localVideoTrackFlow.emit(screenVideoTrack)
-                }
-                peerConnection.connection.senders.forEach { sender ->
+        /*
             if (sender.track()?.kind() == MediaStreamTrack.VIDEO_TRACK_KIND) {
                 peerConnection.connection.removeTrack(sender)
             }
-        }
         peerConnection.connection.addTrack(localVideoTrack)
 
         */

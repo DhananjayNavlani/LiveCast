@@ -35,7 +35,8 @@ class StreamPeerConnection(
     private val onStreamAdded: ((MediaStream) -> Unit)?,
     private val onNegotiationNeeded: ((StreamPeerConnection, StreamPeerType) -> Unit)?,
     private val onIceCandidate: ((IceCandidate, StreamPeerType) -> Unit)?,
-    private val onVideoTrack: ((RtpTransceiver?) -> Unit)?
+    private val onVideoTrack: ((RtpTransceiver?) -> Unit)?,
+    private val dataChannelObserver: DataChannel.Observer,
 ) : PeerConnection.Observer {
 
     private val typeTag = type.stringify()
@@ -304,7 +305,9 @@ class StreamPeerConnection(
         logger.i { "[onSelectedCandidatePairChanged] #sfu; #$typeTag; event: $event" }
     }
 
-    override fun onDataChannel(channel: DataChannel?): Unit = Unit
+    override fun onDataChannel(channel: DataChannel?) {
+        channel?.registerObserver(dataChannelObserver)
+    }
 
     override fun toString(): String =
         "StreamPeerConnection(type='$typeTag', constraints=$mediaConstraints)"

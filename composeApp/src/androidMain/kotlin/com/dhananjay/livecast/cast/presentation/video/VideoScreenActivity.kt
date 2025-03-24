@@ -26,6 +26,7 @@ import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
 import org.koin.android.ext.android.inject
+import org.koin.androidx.compose.KoinAndroidContext
 
 class VideoScreenActivity : ComponentActivity() {
     private val sessionManager: WebRtcSessionManager by inject()
@@ -47,7 +48,6 @@ class VideoScreenActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         val manager = getSystemService(MediaProjectionManager::class.java)
 
         val isSubscriber = intent.getBooleanExtra(Constants.EXTRA_IS_SUBSCRIBER, false)
@@ -64,14 +64,17 @@ class VideoScreenActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 CompositionLocalProvider(LocalWebRtcSessionManager provides sessionManager) {
-                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                        if(isPermissionGranted){
-                            ScreenCastScreen(
-                                isSubscriber
-                            )
-                        } else{
-                            Greeting(name = "User")
+                    KoinAndroidContext {
+                        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                            if(isPermissionGranted){
+                                ScreenCastScreen(
+                                    isSubscriber
+                                )
+                            } else{
+                                Greeting(name = "User")
+                            }
                         }
+
                     }
                 }
             }

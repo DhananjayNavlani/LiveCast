@@ -18,6 +18,7 @@ import com.dhananjay.livecast.cast.presentation.video.VideoScreenActivity
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import org.koin.android.ext.android.inject
+import org.koin.androidx.compose.KoinAndroidContext
 import org.koin.compose.koinInject
 import kotlin.random.Random
 
@@ -35,23 +36,25 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(), color = Color(Random.nextFloat(), Random.nextFloat(), Random.nextFloat())
-                ) {
-                    val state by koinInject<SignalingClient>().devicesOnline.collectAsStateWithLifecycle(null)
-                    StageScreen(
-                        state = state,
-                        onStart = {
-                            startActivity(Intent(this, VideoScreenActivity::class.java).apply {
-                                putExtra(Constants.EXTRA_IS_SUBSCRIBER, true)
+                KoinAndroidContext {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(), color = Color(Random.nextFloat(), Random.nextFloat(), Random.nextFloat())
+                    ) {
+                        val state by koinInject<SignalingClient>().devicesOnline.collectAsStateWithLifecycle(null)
+                        StageScreen(
+                            state = state,
+                            onStart = {
+                                startActivity(Intent(this, VideoScreenActivity::class.java).apply {
+                                    putExtra(Constants.EXTRA_IS_SUBSCRIBER, true)
+                                })
+                            }, onAnswer = {
+                                startActivity(Intent(this, VideoScreenActivity::class.java).apply {
+                                    putExtra(Constants.EXTRA_IS_SUBSCRIBER, false)
+                                })
                             })
-                        }, onAnswer = {
-                            startActivity(Intent(this, VideoScreenActivity::class.java).apply {
-                                putExtra(Constants.EXTRA_IS_SUBSCRIBER, false)
-                            })
-                        })
-                }
+                    }
 
+                }
             }
 
         }

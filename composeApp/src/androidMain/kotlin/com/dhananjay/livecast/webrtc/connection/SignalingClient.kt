@@ -85,7 +85,7 @@ class SignalingClient(
                     }
 
                     snapshot.documentChanges.forEach { change ->
-                        Log.d(TAG, "The snapshot changes are ${change.document.id} ")
+                        Log.d(TAG, "The snapshot changes are ${change.type} && ${change.document.id} ")
                         if (change.type == DocumentChange.Type.ADDED) {
                             callId = change.document.id
                         }
@@ -96,10 +96,7 @@ class SignalingClient(
                         callDoc!!.get().addOnSuccessListener {
                             it.toObject(OfferAnswer::class.java)?.let {
                                 if (it.isOffer) {
-                                    Log.d(TAG, "Got an offer ${it.timestamp}")
-                                    val result =
-                                        _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
-                                    Log.d(TAG, "Was offer emitted success ?: $result")
+                                    _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
                                 }
                             }
                         }
@@ -189,7 +186,6 @@ class SignalingClient(
         message: String,
         type: StreamPeerType = StreamPeerType.PUBLISHER
     ) {
-        Log.d(TAG, "[sendCommand] $signalingCommand $type")
         when (signalingCommand) {
             SignalingCommand.STATE -> {
 
