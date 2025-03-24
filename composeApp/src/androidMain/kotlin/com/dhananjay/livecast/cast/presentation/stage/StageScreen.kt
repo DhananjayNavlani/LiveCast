@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.dhananjay.livecast.cast.model.DeviceOnline
-import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 
 
 @Composable
@@ -25,7 +24,6 @@ fun StageScreen(
     onAnswer: () -> Unit,
     modifier: Modifier = Modifier) {
 
-    val sessionManager = LocalWebRtcSessionManager.current
     Box(modifier = Modifier.fillMaxSize()) {
         var enabledCall by remember { mutableStateOf(false) }
 

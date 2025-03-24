@@ -27,8 +27,7 @@ import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 
 @Composable
 fun ScreenCastScreen(
-    isSubscriber: Boolean,
-    onEnd:() -> Unit) {
+    isSubscriber: Boolean) {
     val sessionManager = LocalWebRtcSessionManager.current
     val isSub by rememberUpdatedState(isSubscriber)
 
@@ -94,7 +93,7 @@ fun ScreenCastScreen(
                     }
                     CallAction.LeaveCall -> {
                         sessionManager.disconnect(isSub)
-                        onEnd()
+                        activity?.finish()
                     }
                 }
             }

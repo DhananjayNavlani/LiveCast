@@ -8,4 +8,5 @@ object Constants {
     const val ACTION_START_SCREEN_SHARING = "action_start_screen_sharing"
     const val ACTION_STOP_SCREEN_SHARING = "action_stop_screen_sharing"
     const val EXTRA_ON_CAPTURE_SUCCESS = "on_capture_success"
+    const val EXTRA_IS_SUBSCRIBER = "is_subscriber"
 }

@@ -33,7 +33,6 @@ import com.google.firebase.firestore.toObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -54,13 +53,6 @@ class SignalingClient(
     private val TAG = javaClass.simpleName
     private val signalingScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-//  private val client = OkHttpClient()
-//  private val request = Request
-//    .Builder()
-//    .url(BuildConfig.SIGNALING_SERVER_IP_ADDRESS)
-//    .build()
-
-    // opening web socket with signaling server
 //  private val ws = client.newWebSocket(request, SignalingWebSocketListener())
 
     private var callDoc: DocumentReference? = null
@@ -77,7 +69,8 @@ class SignalingClient(
 
 
     // signaling commands to send commands to value pairs to the subscribers
-    private val _signalingCommandFlow = MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 10, extraBufferCapacity = 100)
+    private val _signalingCommandFlow =
+        MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 10, extraBufferCapacity = 100)
     val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
 
     init {
@@ -87,7 +80,7 @@ class SignalingClient(
                 .limit(1)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
-                        Log.e(TAG,"Error fetching offer: $error" )
+                        Log.e(TAG, "Error fetching offer: $error")
                         return@addSnapshotListener
                     }
 
@@ -103,8 +96,9 @@ class SignalingClient(
                         callDoc!!.get().addOnSuccessListener {
                             it.toObject(OfferAnswer::class.java)?.let {
                                 if (it.isOffer) {
-                                    Log.d(TAG,"Got an offer ${it.timestamp}" )
-                                    val result =  _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
+                                    Log.d(TAG, "Got an offer ${it.timestamp}")
+                                    val result =
+                                        _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
                                     Log.d(TAG, "Was offer emitted success ?: $result")
                                 }
                             }
@@ -116,11 +110,11 @@ class SignalingClient(
         }
     }
 
-    val devicesOnline = callbackFlow<DeviceOnline> {
+    val devicesOnline = callbackFlow {
         val listener = firestore.collection("rooms").document("online")
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
-                    Log.e(TAG,"Error fetching offer: $error" )
+                    Log.e(TAG, "Error fetching offer: $error")
                     return@addSnapshotListener
                 }
 
@@ -139,7 +133,7 @@ class SignalingClient(
                 val hasDevice = deviceOnline?.devices?.contains(deviceId) ?: false
 
                 Log.d(TAG, "addDeviceOnline: The collection has device ? $deviceOnline")
-                if(!hasDevice){
+                if (!hasDevice) {
                     var count = deviceOnline?.count?.coerceAtLeast(0) ?: 0
                     it.set(
                         hashMapOf(
@@ -154,13 +148,14 @@ class SignalingClient(
             }
 
             true
-        }catch (e: Exception){
+        } catch (e: Exception) {
             coroutineContext.ensureActive()
-            Log.e(TAG,"Error adding device online: $e" )
+            Log.e(TAG, "Error adding device online: $e")
             false
         }
 
     }
+
     suspend fun removeDeviceOnline(): Boolean {
         return try {
             firestore.collection("rooms").document("online").let {
@@ -181,9 +176,9 @@ class SignalingClient(
                 }
             }
             true
-        }catch (e: Exception){
+        } catch (e: Exception) {
             coroutineContext.ensureActive()
-            Log.e(TAG,"Error removing device online: $e" )
+            Log.e(TAG, "Error removing device online: $e")
             false
         }
 
@@ -194,8 +189,7 @@ class SignalingClient(
         message: String,
         type: StreamPeerType = StreamPeerType.PUBLISHER
     ) {
-        Log.d(TAG,"[sendCommand] $signalingCommand $type" )
-//    ws.send("$signalingCommand $message")
+        Log.d(TAG, "[sendCommand] $signalingCommand $type")
         when (signalingCommand) {
             SignalingCommand.STATE -> {
 
@@ -214,7 +208,7 @@ class SignalingClient(
                 //listen for remote answer
                 callDoc!!.addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
-                        Log.e(TAG,"Error fetching offer: $error" )
+                        Log.e(TAG, "Error fetching offer: $error")
                         return@addSnapshotListener
                     }
 
@@ -228,7 +222,7 @@ class SignalingClient(
                 //listen for remote ice candidates
                 answerCandidates!!.addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
-                        Log.e(TAG,"Error fetching offer: $error" )
+                        Log.e(TAG, "Error fetching offer: $error")
                         return@addSnapshotListener
                     }
 
@@ -261,7 +255,7 @@ class SignalingClient(
                         offerCandidates?.addSnapshotListener { snapshot, error ->
 
                             if (error != null || snapshot == null) {
-                                Log.e(TAG,"Error fetching offer: $error" )
+                                Log.e(TAG, "Error fetching offer: $error")
                                 return@addSnapshotListener
                             }
 
@@ -303,94 +297,14 @@ class SignalingClient(
         }
     }
 
-//  private inner class SignalingWebSocketListener : WebSocketListener() {
-//    override fun onMessage(webSocket: WebSocket, text: String) {
-//      when {
-//        text.startsWith(SignalingCommand.STATE.toString(), true) ->
-//          handleStateMessage(text)
-//        text.startsWith(SignalingCommand.OFFER.toString(), true) ->
-//          handleSignalingCommand(SignalingCommand.OFFER, text)
-//        text.startsWith(SignalingCommand.ANSWER.toString(), true) ->
-//          handleSignalingCommand(SignalingCommand.ANSWER, text)
-//        text.startsWith(SignalingCommand.ICE.toString(), true) ->
-//          handleSignalingCommand(SignalingCommand.ICE, text)
-//      }
-//    }
-//  }
-
-    private fun handleStateMessage(message: String) {
-        val state = getSeparatedMessage(message)
-//        _sessionStateFlow.value = WebRTCSessionState.valueOf(state)
-    }
-
-    private fun handleSignalingCommand(command: SignalingCommand, text: String) {
-        val value = getSeparatedMessage(text)
-        Log.d(TAG,"received signaling: $command $value" )
-        signalingScope.launch {
-            _signalingCommandFlow.emit(command to value)
-        }
-    }
-
-    private fun getSeparatedMessage(text: String) = text.substringAfter(' ')
-
     fun dispose() {
-//        _sessionStateFlow.value = WebRTCSessionState.Offline
-        signalingScope.launch {
-            firestore.collection("rooms").document("online").set(
-                hashMapOf(
-                    "count" to FieldValue.increment(-1),
-                    "devices" to FieldValue.arrayRemove("${Build.DEVICE}_${Build.MANUFACTURER}")
-                ),
-                SetOptions.merge()
-            ).await()
-        }
-        signalingScope.coroutineContext.cancelChildren()
-
-//    ws.cancel()
-    }
-
-    suspend fun testRead() {
-        firestore.collection("rooms").document("online")
-            .let {
-                it.get().addOnSuccessListener{
-                    Log.d(TAG, "testRead: The success listener ${it.id}")
-                }.addOnFailureListener{
-                    Log.d(TAG, "testRead: The failure listener ${it.message}")
-                }
-                val id = it.get().await().id
-                Log.d(TAG, "testRead: Getting await data -> $id")
-            }
-    }
-
-    suspend fun testWrite() {
-        firestore.collection("rooms").document("test").let {
-            it.set(
-                hashMapOf(
-                    "count" to 1,
-                    "devices" to listOf(deviceId)
-                )
-            ).addOnSuccessListener {
-                Log.d(TAG, "testWrite: The success listener ${it}")
-            }.addOnFailureListener {
-                Log.d(TAG, "testWrite: The failure listener ${it.message}")
-            }
-
-            Log.d(TAG, "testWrite: Before await()")
-           it.set(
-                hashMapOf(
-                    "count" to 2,
-                    "devices" to listOf(deviceId)
-                ),
-                SetOptions.merge()
-            ).await()
-            Log.d(TAG, "testWrite: After await()")
-
-
-        }
 
     }
+
 
 }
+
+
 
 enum class WebRTCSessionState {
     Active, // Offer and Answer messages has been sent
