@@ -1,7 +1,12 @@
 package com.dhananjay.livecast.cast.presentation.video
 
+import android.util.Log
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
@@ -26,7 +32,22 @@ import androidx.compose.ui.unit.dp
 import com.dhananjay.livecast.cast.presentation.components.VideoRenderer
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 
-
+enum class GestureType {
+    TAP,
+    DOUBLE_TAP,
+    LONG_PRESS,
+    PRESS,
+    DRAG_START,
+    DRAG_END,
+    DRAG_CANCEL,
+    ZOOM,
+    ROTATE,
+    PINCH,
+    SWIPE_UP,
+    SWIPE_DOWN,
+    SWIPE_LEFT,
+    SWIPE_RIGHT
+}
 @Composable
 fun ScreenCastScreen(
     isSubscriber: Boolean) {
@@ -37,20 +58,113 @@ fun ScreenCastScreen(
         sessionManager.onSessionScreenReady(isSub)
     }
 
+    //log info about each pointer input event
     Box(
-        modifier = Modifier.fillMaxSize()
-            .pointerInput(sessionManager){
-                detectTapGestures(onDoubleTap = {
-                    sessionManager.sendEvent(it)
-                },
-                    onLongPress = {
-                        sessionManager.sendEvent(it)
+        modifier = Modifier
+            .fillMaxSize()
+            // Tap Gestures: single tap, double tap, long press, and press
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { offset ->
+                        Log.d("GestureDetection", "Tap: $offset")
+                        sessionManager.sendEvent(offset, GestureType.TAP)
                     },
-                    onPress = {
-                        sessionManager.sendEvent(it)
+                    onDoubleTap = { offset ->
+                        Log.d("GestureDetection", "Double Tap: $offset")
+                        sessionManager.sendEvent(offset, GestureType.DOUBLE_TAP)
+                    },
+                    onLongPress = { offset ->
+                        Log.d("GestureDetection", "Long Press: $offset")
+                        sessionManager.sendEvent(offset, GestureType.LONG_PRESS)
+                    },
+                    onPress = { offset ->
+                        Log.d("GestureDetection", "Press: $offset")
+                        sessionManager.sendEvent(offset, GestureType.PRESS)
+//                        // This is a suspend function, so you can use it to delay or cancel the press
+//                        try {
+//                            // Simulate a long press
+//                            awaitRelease()
+//                            Log.d("GestureDetection", "Press released: $offset")
+//                            sessionManager.sendEvent(offset, GestureType.PRESS)
+//                        } catch (e: Exception) {
+//                            Log.d("GestureDetection", "Press cancelled: $offset")
+//                            sessionManager.sendEvent(offset, GestureType.DRAG_CANCEL)
+//                        }
                     }
-                    ) {
-                    sessionManager.sendEvent(it)
+                )
+            }
+            // Drag Gestures: detect drag start, dragging, and end/cancel events
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        Log.d("GestureDetection", "Drag Start: $offset")
+                        sessionManager.sendEvent(offset, GestureType.DRAG_START)
+                    },
+                    onDragEnd = {
+                        Log.d("GestureDetection", "Drag End")
+                        sessionManager.sendEvent(Offset.Zero, GestureType.DRAG_END)
+                    },
+                    onDragCancel = {
+                        Log.d("GestureDetection", "Drag Cancel")
+                        sessionManager.sendEvent(Offset.Zero, GestureType.DRAG_CANCEL)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        val newOffset = Offset(
+                            x = change.position.x + dragAmount.x,
+                            y = change.position.y + dragAmount.y
+                        )
+                        Log.d("GestureDetection", "Dragging: $newOffset")
+                        sessionManager.sendEvent(newOffset, GestureType.DRAG_START)
+                    }
+                )
+            }
+            // Transform Gestures: detect multi-touch transforms (pinch, zoom, and rotation)
+            .pointerInput(Unit) {
+                detectTransformGestures { centroid, pan, zoom, rotation ->
+                    Log.d("GestureDetection", "Transform: centroid=$centroid, pan=$pan, zoom=$zoom, rotation=$rotation")
+                    sessionManager.sendEvent(centroid, GestureType.PINCH)
+                    sessionManager.sendEvent(centroid, GestureType.ZOOM)
+                    sessionManager.sendEvent(centroid, GestureType.ROTATE)
+                }
+            }
+            .pointerInput (Unit){
+                var start = Offset.Zero
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        start = it
+                    }
+                ) { change, dragAmount ->
+                    val end = change.position
+                    if(dragAmount > 0){
+                        //swipe down
+                        Log.d("GestureDetection", "Swipe Down: $dragAmount")
+                        sessionManager.sendEvent(start, GestureType.SWIPE_DOWN, end)
+                    } else{
+                        //swipe up
+                        Log.d("GestureDetection", "Swipe Up: $dragAmount")
+                        sessionManager.sendEvent(start, GestureType.SWIPE_UP, end)
+                    }
+                }
+            }
+            .pointerInput(Unit){
+                var start = Offset.Zero
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        start = it
+                        // Handle drag start
+                    }
+                ) { change, dragAmount ->
+                    val end = change.position
+                    if(dragAmount > 0){
+                        //swipe right
+                        Log.d("GestureDetection", "Swipe Right: $dragAmount")
+                        sessionManager.sendEvent(start, GestureType.SWIPE_RIGHT, end)
+                    } else{
+                        //swipe left
+                        Log.d("GestureDetection", "Swipe Left: $dragAmount")
+                        sessionManager.sendEvent(change.position, GestureType.SWIPE_LEFT, end)
+                    }
                 }
             }
     ) {

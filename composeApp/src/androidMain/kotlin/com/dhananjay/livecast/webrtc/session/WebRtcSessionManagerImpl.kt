@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.core.content.getSystemService
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
 import com.dhananjay.livecast.cast.data.services.ScreenSharingService
+import com.dhananjay.livecast.cast.presentation.video.GestureType
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.connection.SignalingCommand
@@ -199,7 +200,8 @@ class WebRtcSessionManagerImpl(
             onDataChannel = {
                 Log.d(TAG, "onDataChannel: ${it} is subscriber ? $isSubscriber")
                 if (!isSubscriber){
-                    it.registerObserver(object : DataChannel.Observer {
+                    dataChannel = it
+                    dataChannel.registerObserver(object : DataChannel.Observer {
                         override fun onBufferedAmountChange(p0: Long) {
                             Log.d(TAG, "onBufferedAmountChange: $p0")
                         }
@@ -212,7 +214,8 @@ class WebRtcSessionManagerImpl(
                             val data = buffer.data
                             val byteArray = ByteArray(data.remaining())
                             data.get(byteArray)
-                            val offset = String(byteArray, Charsets.UTF_8).split(" ").takeIf { it.size == 2 }?.let {
+                            val offset = String(byteArray, Charsets.UTF_8).split(" ").takeIf { it.size == 5}?.let {
+                                Log.d(TAG, "onMessage: ${it}}")
                                 Offset(it[0].toFloat(), it[1].toFloat())
                             } ?: run {
                                 Log.d(TAG, "onMessage: The message is not valid")
@@ -260,9 +263,6 @@ class WebRtcSessionManagerImpl(
 //    peerConnection.connection.addTrack(localAudioTrack)
         this.isSubscriber = isSubscriber
         dataChannel = peerConnection.connection.createDataChannel(Constants.DATA_CHANNEL_KEY, DataChannel.Init().apply {
-            negotiated = true
-            ordered = true
-            id = 0
         } )
         sessionManagerScope.launch {
             // sending local video track to show local video from start
@@ -276,15 +276,14 @@ class WebRtcSessionManagerImpl(
         }
     }
 
-    override fun sendEvent(event: Offset) {
+    override fun sendEvent(start: Offset, gestureType: GestureType, end: Offset?) {
         if(!isSubscriber){
             Log.d(TAG, "sendEvent: not a subscriber")
             return
         }
-        Log.d(TAG, "sendEvent: The event is $event")
         dataChannel.send(
             DataChannel.Buffer(
-                ByteBuffer.wrap("${event.x} ${event.y}".toByteArray(Charsets.UTF_8)),
+                ByteBuffer.wrap("${start.x} ${start.y} ${end?.x} ${end?.y} $gestureType".toByteArray(Charsets.UTF_8)),
                 false
             )
         )
@@ -325,6 +324,8 @@ class WebRtcSessionManagerImpl(
             }.also {
                 context.startService(it)
             }
+        }else{
+            signalingClient.disconnectCall()
         }
 
         // dispose audio handler and video capturer.

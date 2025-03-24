@@ -18,6 +18,7 @@ package com.dhananjay.livecast.webrtc.session
 
 import android.content.Intent
 import androidx.compose.ui.geometry.Offset
+import com.dhananjay.livecast.cast.presentation.video.GestureType
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import kotlinx.coroutines.flow.SharedFlow
@@ -25,27 +26,27 @@ import org.webrtc.VideoTrack
 
 interface WebRtcSessionManager {
 
-  var isSubscriber: Boolean
+    var isSubscriber: Boolean
 
-  val signalingClient: SignalingClient
+    val signalingClient: SignalingClient
 
-  val peerConnectionFactory: StreamPeerConnectionFactory
+    val peerConnectionFactory: StreamPeerConnectionFactory
 
-  val localVideoTrackFlow: SharedFlow<VideoTrack>
+    val localVideoTrackFlow: SharedFlow<VideoTrack>
 
-  val remoteVideoTrackFlow: SharedFlow<VideoTrack>
+    val remoteVideoTrackFlow: SharedFlow<VideoTrack>
 
-  fun onSessionScreenReady(isSubscriber: Boolean)
+    fun onSessionScreenReady(isSubscriber: Boolean)
 
-  fun sendEvent(event: Offset)
+    fun sendEvent(start: Offset, gestureType: GestureType, end: Offset? = null)
 
-  fun flipCamera()
+    fun flipCamera()
 
-  fun enableMicrophone(enabled: Boolean)
+    fun enableMicrophone(enabled: Boolean)
 
-  fun enableCamera(enabled: Boolean)
+    fun enableCamera(enabled: Boolean)
 
-  fun disconnect()
+    fun disconnect()
 
-  fun handleScreenSharing(data: Intent)
+    fun handleScreenSharing(data: Intent)
 }

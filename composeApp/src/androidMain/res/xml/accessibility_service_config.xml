@@ -3,6 +3,7 @@
     android:accessibilityEventTypes="typeAllMask"
     android:canPerformGestures="true"
     android:canRequestFilterKeyEvents="true"
+    android:canTakeScreenshot="true"
     android:accessibilityFlags="flagDefault|flagEnableAccessibilityVolume|flagIncludeNotImportantViews|flagReportViewIds|flagRequestAccessibilityButton|flagRequestFingerprintGestures|flagRequestTouchExplorationMode|flagSendMotionEvents|flagRequestEnhancedWebAccessibility|flagRequestMultiFingerGestures|flagInputMethodEditor|flagRetrieveInteractiveWindows|flagRequestFilterKeyEvents|flagServiceHandlesDoubleTap"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="100"

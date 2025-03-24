@@ -1,5 +1,6 @@
 package com.dhananjay.livecast.di
 
+import com.dhananjay.livecast.cast.data.services.helpers.TouchGestureHelper
 import androidx.work.WorkManager
 import com.dhananjay.livecast.MainViewModel
 import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
@@ -17,7 +18,7 @@ import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
-
+import com.dhananjay.livecast.cast.data.RemoteDataSource
 val appModule = module {
     single { FirebaseFirestore.getInstance() }
     single { FirebaseCrashlytics.getInstance() }
@@ -28,6 +29,7 @@ val appModule = module {
         bind<WebRtcSessionManager>()
     }
     singleOf(::NotificationHelper)
+    singleOf(::RemoteDataSource)
     worker { DeviceOnlineWorker(get(),get(),get()) }
     viewModel { MainViewModel(get()) }
     single { WorkManager.getInstance(get()) }

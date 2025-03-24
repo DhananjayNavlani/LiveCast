@@ -3,6 +3,7 @@ package com.dhananjay.livecast
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -40,9 +41,9 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         viewModel.addDeviceOnline()
-//        if(!isAccessibilityEnabled()) {
-//            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-//        }
+        if(!isAccessibilityEnabled()) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

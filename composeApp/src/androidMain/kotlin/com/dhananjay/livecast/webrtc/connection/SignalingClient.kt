@@ -16,11 +16,16 @@
 
 package com.dhananjay.livecast.webrtc.connection
 
+import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.util.Log
+import com.dhananjay.livecast.cast.data.services.AccessibilityService
+import com.dhananjay.livecast.cast.data.services.ScreenSharingService
 import com.dhananjay.livecast.cast.model.DeviceOnline
 import com.dhananjay.livecast.cast.model.Ice
 import com.dhananjay.livecast.cast.model.OfferAnswer
+import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.peer.StreamPeerType
 import com.dhananjay.livecast.webrtc.session.ICE_SEPARATOR
 import com.google.firebase.firestore.DocumentChange
@@ -42,18 +47,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlin.coroutines.coroutineContext
 
-//import okhttp3.OkHttpClient
-//import okhttp3.Request
-//import okhttp3.WebSocket
-//import okhttp3.WebSocketListener
-
 class SignalingClient(
+    private val context: Context,
     private val firestore: FirebaseFirestore
 ) {
     private val TAG = javaClass.simpleName
     private val signalingScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-//  private val ws = client.newWebSocket(request, SignalingWebSocketListener())
 
     private var callDoc: DocumentReference? = null
     private val offerCandidates get() = callDoc?.collection("offerCandidates")
@@ -86,9 +86,24 @@ class SignalingClient(
 
                     snapshot.documentChanges.forEach { change ->
                         Log.d(TAG, "The snapshot changes are ${change.type} && ${change.document.id} ")
-                        if (change.type == DocumentChange.Type.ADDED) {
-                            callId = change.document.id
+                        val doc = change.document.toObject<OfferAnswer>()
+                        when(change.type){
+                            DocumentChange.Type.ADDED -> {
+                                callId = doc.id
+                            }
+                            DocumentChange.Type.MODIFIED -> {
+                                if(!doc.isCallActive){
+                                    Intent(context, ScreenSharingService::class.java).apply {
+                                        action = Constants.ACTION_STOP_SCREEN_SHARING
+                                    }.also {
+                                        context.startService(it)
+                                    }
+                                }
+                            }
+                            DocumentChange.Type.REMOVED -> {
+                            }
                         }
+
                     }
                     callId?.let {
                         callDoc = firestore.collection("calls").document(it)
@@ -242,7 +257,8 @@ class SignalingClient(
                         callDoc!!.set(
                             OfferAnswer(
                                 sdp = message,
-                                isOffer = false
+                                isOffer = false,
+                                isCallActive = true
                             ),
                             SetOptions.merge()
                         ).await()
@@ -295,6 +311,19 @@ class SignalingClient(
 
     fun dispose() {
 
+    }
+
+    fun disconnectCall(){
+        signalingScope.launch {
+            callDoc?.set(
+                OfferAnswer(
+                    sdp = "",
+                    isOffer = false,
+                    isCallActive = false
+                ),
+                SetOptions.merge()
+            )?.await()
+        }
     }
 
 
