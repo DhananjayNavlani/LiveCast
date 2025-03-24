@@ -6,6 +6,13 @@
     <string name="session_creating">Creating session</string>
     <string name="session_active">Session Active</string>
 
+    <string name="screen_sharing">Your screen is getting shared.</string>
+    <string name="accessibility_service_label">LiveCast</string>
+    <string name="accessibility_service_description">Provides screen controlling features</string>
+    <string name="notification_channel_name">App Updates Channel</string>
+    <string name="notification_channel_desc">Notification on app updates</string>
+    <string name="title_activity_video_screen">VideoScreenActivity</string>
+
     <string name="button_start_session">Start session</string>
     <string name="button_join_session">Join session</string>
 
