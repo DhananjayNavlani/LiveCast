@@ -50,7 +50,9 @@ enum class GestureType {
 }
 @Composable
 fun ScreenCastScreen(
-    isSubscriber: Boolean) {
+    isSubscriber: Boolean,
+    modifier: Modifier = Modifier
+) {
     val sessionManager = LocalWebRtcSessionManager.current
     val isSub by rememberUpdatedState(isSubscriber)
 
@@ -60,7 +62,7 @@ fun ScreenCastScreen(
 
     //log info about each pointer input event
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             // Tap Gestures: single tap, double tap, long press, and press
             .pointerInput(Unit) {
@@ -222,7 +224,6 @@ fun ScreenCastScreen(
 //                        sessionManager.flipCamera()
                     }
                     CallAction.LeaveCall -> {
-                        sessionManager.disconnect()
                         activity?.finish()
                     }
                 }

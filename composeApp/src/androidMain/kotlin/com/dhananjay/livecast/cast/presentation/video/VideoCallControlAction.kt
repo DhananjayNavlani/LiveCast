@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import com.dhananjay.livecast.R
 import com.dhananjay.livecast.cast.presentation.ui.Disabled
-import com.dhananjay.livecast.cast.presentation.ui.Primary
 
 sealed class CallAction {
   data class ToggleMicroPhone(
@@ -67,24 +66,24 @@ fun buildDefaultCallControlActions(
   )
 
   return listOf(
-    VideoCallControlAction(
-      icon = microphoneIcon,
-      iconTint = Color.White,
-      background = Primary,
-      callAction = CallAction.ToggleMicroPhone(callMediaState.isMicrophoneEnabled)
-    ),
-    VideoCallControlAction(
-      icon = cameraIcon,
-      iconTint = Color.White,
-      background = Primary,
-      callAction = CallAction.ToggleCamera(callMediaState.isCameraEnabled)
-    ),
-    VideoCallControlAction(
-      icon = painterResource(id = R.drawable.ic_camera_flip),
-      iconTint = Color.White,
-      background = Primary,
-      callAction = CallAction.FlipCamera
-    ),
+//    VideoCallControlAction(
+//      icon = microphoneIcon,
+//      iconTint = Color.White,
+//      background = Primary,
+//      callAction = CallAction.ToggleMicroPhone(callMediaState.isMicrophoneEnabled)
+//    ),
+//    VideoCallControlAction(
+//      icon = cameraIcon,
+//      iconTint = Color.White,
+//      background = Primary,
+//      callAction = CallAction.ToggleCamera(callMediaState.isCameraEnabled)
+//    ),
+//    VideoCallControlAction(
+//      icon = painterResource(id = R.drawable.ic_camera_flip),
+//      iconTint = Color.White,
+//      background = Primary,
+//      callAction = CallAction.FlipCamera
+//    ),
     VideoCallControlAction(
       icon = painterResource(id = R.drawable.ic_call_end),
       iconTint = Color.White,

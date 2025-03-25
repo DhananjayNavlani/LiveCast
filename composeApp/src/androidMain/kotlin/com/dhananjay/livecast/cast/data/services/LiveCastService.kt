@@ -12,7 +12,9 @@ import com.dhananjay.livecast.MainActivity
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.data.services.helpers.TouchGestureHelper
 import com.dhananjay.livecast.cast.model.DeviceConfig
+import com.dhananjay.livecast.cast.presentation.video.GestureType
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
+import com.dhananjay.livecast.webrtc.session.WebRtcSessionManagerImpl
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.toObject
 import kotlinx.coroutines.CoroutineScope
@@ -31,24 +33,13 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val crashlytics by inject<FirebaseCrashlytics>()
     private val remoteDataSource by inject<RemoteDataSource>()
-
+    private val context by lazy {
+        this
+    }
 
     fun onEvent(event: AccessibilityEvent) {
-        //Log all important info from accessibility event
-        Log.d(
-            TAG,
-            "onEvent: ${event.eventType} ${event.packageName} ${event.className} ${event.text} "
-        )
-
     }
 
-    fun onTap(offset: Offset) {
-        TouchGestureHelper.tap(this, offset.x, offset.y,
-            {
-                Log.d(TAG, "onTap: tap result is $it")
-            })
-
-    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -62,10 +53,7 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
             remoteDataSource.getConfigCollectionFlow().distinctUntilChanged().collectLatest {
                 it.onSuccess { document ->
                     val config = document.toObject<DeviceConfig>() ?: return@onSuccess
-                    val cmpName = ComponentName(this@LiveCastService, "${packageName}.LauncherAlias")
-                    Log.d(
-                        TAG,
-                        "startObservers: $cmpName \n ${LauncherAlias::class.java.canonicalName} \n ${LauncherAlias::class.java.name} \n ${LauncherAlias::class.java.simpleName} \n ${LauncherAlias::class.java.typeName} \n ${LauncherAlias::class.java.toString()}")
+                    val cmpName = ComponentName(context, "${packageName}.LauncherAlias")
 
 //                    val cmpName = ComponentName(this@LiveCastService, MainActivity::class.java)
                     if (config.showIcon) {
@@ -88,7 +76,30 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
                 }
             }
         }
+
+        serviceScope.launch {
+            WebRtcSessionManagerImpl.keyEventFlow.collectLatest {
+                Log.d(TAG, "onServiceConnected: key event is $it")
+                when(it.first){
+                    GestureType.TAP -> {
+                        TouchGestureHelper.tap(context, it.second.x, it.second.y,)
+                    }
+                    GestureType.DOUBLE_TAP -> TouchGestureHelper.doubleTap(context, it.second.x, it.second.y)
+                    GestureType.LONG_PRESS -> TouchGestureHelper.longPress(context, it.second.x, it.second.y)
+                    GestureType.PINCH -> TouchGestureHelper.pinch(context, it.second.x, it.second.y, it.third?.x ?: 0f, it.third?.y ?: 0f)
+                    GestureType.SWIPE_UP -> TouchGestureHelper.swipe(context,it.second.x,it.second.y,it.third?.x ?: it.second.x,it.third?.y ?: 0f)
+                    GestureType.SWIPE_DOWN -> TouchGestureHelper.swipe(context, it.second.x, it.second.y, it.third?.x ?: it.second.x, it.third?.y ?: 500f)
+                    GestureType.SWIPE_LEFT -> TouchGestureHelper.swipe(context, it.second.x, it.second.y, it.third?.x ?: 0f, it.third?.y ?: it.second.y)
+                    GestureType.SWIPE_RIGHT -> TouchGestureHelper.swipe(context,it.second.x, it.second.y, it.third?.x ?: 500f, it.third?.y ?: it.second.y)
+                    else -> {
+                        Log.d(TAG, "onServiceConnected: Unknown gesture type")
+                    }
+                }
+            }
+        }
     }
+
+
 
     override fun onUnbind(intent: Intent?): Boolean {
         crashlytics.setCustomKey(
@@ -99,5 +110,3 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
     }
 
 }
-
-class LauncherAlias

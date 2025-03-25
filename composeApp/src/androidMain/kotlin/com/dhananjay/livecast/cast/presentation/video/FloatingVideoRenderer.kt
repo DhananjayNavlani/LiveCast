@@ -18,14 +18,10 @@ package com.dhananjay.livecast.cast.presentation.video
 
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Card
 import androidx.compose.runtime.Composable
@@ -55,6 +51,9 @@ import org.webrtc.VideoTrack
  * when dragging the floating UI around the screen.
  * @param modifier Modifier for styling.
  */
+// Copyright 2023 Stream.IO, Inc. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 @Composable
 fun FloatingVideoRenderer(
   videoTrack: VideoTrack,
@@ -68,70 +67,62 @@ fun FloatingVideoRenderer(
   val offset by animateOffsetAsState(targetValue = Offset(offsetX, offsetY))
   val density = LocalDensity.current
 
-  // Reset offset when parent bounds change
-  LaunchedEffect(parentBounds.width, parentBounds.height) {
+  LaunchedEffect(parentBounds.width) {
     offsetX = 0f
     offsetY = 0f
   }
 
   val paddingOffset = density.run { 16.dp.toPx() }
 
-  Box(
-    modifier = modifier
-      .fillMaxSize()
+  Card(
+    elevation = 8.dp,
+    modifier = Modifier
+      .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
+      .pointerInput(parentBounds) {
+        detectDragGestures { change, dragAmount ->
+          change.consume()
+
+          val newOffsetX = (offsetX + dragAmount.x)
+            .coerceAtLeast(
+              -calculateHorizontalOffsetBounds(
+                parentBounds = parentBounds,
+                paddingValues = paddingValues,
+                floatingVideoSize = videoSize,
+                density = density,
+                offset = paddingOffset * 2
+              )
+            )
+            .coerceAtMost(
+              0f
+            )
+
+          val newOffsetY = (offsetY + dragAmount.y)
+            .coerceAtLeast(0f)
+            .coerceAtMost(
+              calculateVerticalOffsetBounds(
+                parentBounds = parentBounds,
+                paddingValues = paddingValues,
+                floatingVideoSize = videoSize,
+                density = density,
+                offset = paddingOffset * 2
+              )
+            )
+
+          offsetX = newOffsetX
+          offsetY = newOffsetY
+        }
+      }
+      .then(modifier)
+      .padding(16.dp)
+      .onGloballyPositioned { videoSize = it.size },
+    shape = RoundedCornerShape(16.dp)
   ) {
-    Card(
-      elevation = 8.dp,
+    VideoRenderer(
       modifier = Modifier
-        .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
-        .pointerInput(parentBounds) {
-          detectDragGestures { change, dragAmount ->
-            change.consume()
-
-            val newOffsetX = (offsetX + dragAmount.x)
-              .coerceIn(
-                minimumValue = -calculateHorizontalOffsetBounds(
-                  parentBounds = parentBounds,
-                  paddingValues = paddingValues,
-                  floatingVideoSize = videoSize,
-                  density = density,
-                  offset = paddingOffset
-                ),
-                maximumValue = 0f
-              )
-
-            val newOffsetY = (offsetY + dragAmount.y)
-              .coerceIn(
-                minimumValue = 0f,
-                maximumValue = calculateVerticalOffsetBounds(
-                  parentBounds = parentBounds,
-                  paddingValues = paddingValues,
-                  floatingVideoSize = videoSize,
-                  density = density,
-                  offset = paddingOffset
-                )
-              )
-
-            offsetX = newOffsetX
-            offsetY = newOffsetY
-          }
-        }
-        .padding(16.dp)
-        .onGloballyPositioned {
-          videoSize = it.size
-        }
-        .aspectRatio(16f / 9f)  // Optional: maintain video aspect ratio
-        .widthIn(max = 300.dp)  // Optional: limit max width
-        .heightIn(max = 200.dp),  // Optional: limit max height
-      shape = RoundedCornerShape(16.dp)
-    ) {
-      VideoRenderer(
-        modifier = Modifier
-          .fillMaxSize()
-          .clip(RoundedCornerShape(16.dp)),
-        videoTrack = videoTrack
-      )
-    }
+        .fillMaxSize()
+        .clip(RoundedCornerShape(16.dp)),
+      videoTrack = videoTrack
+    )
   }
 }
 
@@ -142,14 +133,10 @@ private fun calculateHorizontalOffsetBounds(
   density: Density,
   offset: Float
 ): Float {
-  val rightPadding = density.run {
-    paddingValues.calculateRightPadding(LayoutDirection.Ltr).toPx()
-  }
-  val leftPadding = density.run {
-    paddingValues.calculateLeftPadding(LayoutDirection.Ltr).toPx()
-  }
+  val rightPadding =
+    density.run { paddingValues.calculateRightPadding(LayoutDirection.Ltr).toPx() }
 
-  return parentBounds.width - rightPadding - leftPadding - floatingVideoSize.width - offset
+  return parentBounds.width - rightPadding - floatingVideoSize.width - offset
 }
 
 private fun calculateVerticalOffsetBounds(
@@ -159,12 +146,8 @@ private fun calculateVerticalOffsetBounds(
   density: Density,
   offset: Float
 ): Float {
-  val bottomPadding = density.run {
-    paddingValues.calculateBottomPadding().toPx()
-  }
-  val topPadding = density.run {
-    paddingValues.calculateTopPadding().toPx()
-  }
+  val bottomPadding =
+    density.run { paddingValues.calculateBottomPadding().toPx() }
 
-  return parentBounds.height - bottomPadding - topPadding - floatingVideoSize.height - offset
+  return parentBounds.height - bottomPadding - floatingVideoSize.height - offset
 }

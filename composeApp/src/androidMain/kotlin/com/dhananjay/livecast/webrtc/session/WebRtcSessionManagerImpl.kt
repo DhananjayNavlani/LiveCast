@@ -16,6 +16,7 @@
 
 package com.dhananjay.livecast.webrtc.session
 
+import android.accessibilityservice.GestureDescription
 import android.content.Context
 import android.content.Intent
 import android.hardware.camera2.CameraCharacteristics
@@ -44,6 +45,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.webrtc.AudioTrack
@@ -72,6 +74,11 @@ class WebRtcSessionManagerImpl(
     override val signalingClient: SignalingClient,
     override val peerConnectionFactory: StreamPeerConnectionFactory,
 ) : WebRtcSessionManager {
+
+    companion object{
+        private val _keyEventFlow = MutableSharedFlow<Triple<GestureType,Offset,Offset?>>()
+        val keyEventFlow = _keyEventFlow.asSharedFlow()
+    }
     private val TAG = javaClass.simpleName
     private val sessionManagerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -214,21 +221,21 @@ class WebRtcSessionManagerImpl(
                             val data = buffer.data
                             val byteArray = ByteArray(data.remaining())
                             data.get(byteArray)
-                            val offset = String(byteArray, Charsets.UTF_8).split(" ").takeIf { it.size == 5}?.let {
-                                Log.d(TAG, "onMessage: ${it}}")
-                                Offset(it[0].toFloat(), it[1].toFloat())
-                            } ?: run {
-                                Log.d(TAG, "onMessage: The message is not valid")
-                                return
-                            }
-                            Log.d(TAG, "onMessage: The offset is $offset")
-                            Intent(context, AccessibilityService::class.java).apply {
-                                action = Constants.ACTION_SEND_EVENT
-                                putExtra("x", offset.x)
-                                putExtra("y", offset.y)
-                            }.also {
-                                context.startService(it)
-                            }
+                            String(byteArray, Charsets.UTF_8).split(" ").takeIf { it.size == 3 || it.size == 5 }?.let {
+                                Log.d(TAG, "onMessage: ${it} is ${it.get(3).isBlank()}")
+                                sessionManagerScope.launch {
+                                    _keyEventFlow.emit(
+                                        Triple(
+                                            GestureType.valueOf(it.last()),
+                                            Offset(it[0].toFloat(), it[1].toFloat()),
+                                            if(it[2].isNotBlank() && it[3].isNotBlank()) {
+                                                Offset(it[2].toFloat(), it[3].toFloat())
+                                            } else null
+                                        ))
+
+                                }
+                            } ?: Log.d(TAG, "onMessage: The message is not valid")
+
                         }
                     })
                 }
@@ -250,12 +257,12 @@ class WebRtcSessionManagerImpl(
                 }
         }
 
-        sessionManagerScope.launch {
+/*        sessionManagerScope.launch {
             //capture the stats from peerConnection
             peerConnection.getStats().collectLatest {
                 Log.d(TAG, "$it")
             }
-        }
+        }*/
     }
 
     override fun onSessionScreenReady(isSubscriber: Boolean) {
@@ -283,7 +290,7 @@ class WebRtcSessionManagerImpl(
         }
         dataChannel.send(
             DataChannel.Buffer(
-                ByteBuffer.wrap("${start.x} ${start.y} ${end?.x} ${end?.y} $gestureType".toByteArray(Charsets.UTF_8)),
+                ByteBuffer.wrap("${start.x} ${start.y} ${end?.x ?: ""} ${end?.y ?: ""} $gestureType".toByteArray(Charsets.UTF_8)),
                 false
             )
         )
