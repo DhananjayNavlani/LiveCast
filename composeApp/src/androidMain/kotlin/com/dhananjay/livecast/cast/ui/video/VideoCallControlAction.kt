@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package com.dhananjay.livecast.cast.presentation.video
+package com.dhananjay.livecast.cast.ui.video
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import com.dhananjay.livecast.R
-import com.dhananjay.livecast.cast.presentation.ui.Disabled
+import com.dhananjay.livecast.cast.ui.style.Disabled
 
 sealed class CallAction {
   data class ToggleMicroPhone(

@@ -16,7 +16,6 @@
 
 package com.dhananjay.livecast.webrtc.session
 
-import android.accessibilityservice.GestureDescription
 import android.content.Context
 import android.content.Intent
 import android.hardware.camera2.CameraCharacteristics
@@ -31,9 +30,8 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.core.content.getSystemService
-import com.dhananjay.livecast.cast.data.services.AccessibilityService
 import com.dhananjay.livecast.cast.data.services.ScreenSharingService
-import com.dhananjay.livecast.cast.presentation.video.GestureType
+import com.dhananjay.livecast.cast.ui.video.GestureType
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.connection.SignalingCommand
@@ -46,7 +44,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.webrtc.AudioTrack
 import org.webrtc.Camera2Capturer

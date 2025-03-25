@@ -1,4 +1,4 @@
-package com.dhananjay.livecast.cast.presentation.video
+package com.dhananjay.livecast.cast.ui.video
 
 import android.util.Log
 import androidx.activity.compose.LocalActivity
@@ -29,7 +29,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.dhananjay.livecast.cast.presentation.components.VideoRenderer
+import com.dhananjay.livecast.cast.ui.components.VideoRenderer
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 
 enum class GestureType {

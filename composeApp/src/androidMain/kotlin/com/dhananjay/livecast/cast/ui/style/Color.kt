@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.dhananjay.livecast.cast.presentation.ui
+package com.dhananjay.livecast.cast.ui.style
 
 import androidx.compose.ui.graphics.Color
 

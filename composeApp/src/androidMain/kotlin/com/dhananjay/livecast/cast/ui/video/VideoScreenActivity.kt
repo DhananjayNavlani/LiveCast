@@ -1,4 +1,4 @@
-package com.dhananjay.livecast.cast.presentation.video
+package com.dhananjay.livecast.cast.ui.video
 
 import android.content.Intent
 import android.media.projection.MediaProjectionConfig

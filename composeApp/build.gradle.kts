@@ -12,6 +12,7 @@ plugins {
     alias(libs.plugins.googleServices)
     alias(libs.plugins.crashlytics)
     alias(libs.plugins.lumo)
+    alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
@@ -59,8 +60,9 @@ kotlin {
         
         androidMain.dependencies {
             implementation(compose.preview)
+            implementation(libs.androidx.material3.compose)
             implementation(libs.androidx.activity.compose)
-
+            implementation(libs.kotlinx.serialization.json)
             implementation(libs.bundles.webrtc.android)
             implementation(libs.stream.log.android)
 
@@ -76,12 +78,14 @@ kotlin {
             implementation(libs.koin.androidx.work)
         }
         commonMain.dependencies {
+
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material)
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
+            implementation(libs.navigation.compose)
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
 
@@ -124,9 +128,6 @@ android {
     buildFeatures {
         compose = true
     }
-}
-dependencies {
-    implementation(libs.androidx.material3.android)
 }
 
 

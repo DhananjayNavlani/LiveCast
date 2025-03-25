@@ -4,15 +4,12 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import androidx.compose.ui.geometry.Offset
-import com.dhananjay.livecast.MainActivity
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.data.services.helpers.TouchGestureHelper
 import com.dhananjay.livecast.cast.model.DeviceConfig
-import com.dhananjay.livecast.cast.presentation.video.GestureType
+import com.dhananjay.livecast.cast.ui.video.GestureType
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManagerImpl
 import com.google.firebase.crashlytics.FirebaseCrashlytics

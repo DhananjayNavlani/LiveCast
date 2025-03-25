@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.dhananjay.livecast.cast.presentation.video
+package com.dhananjay.livecast.cast.ui.video
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

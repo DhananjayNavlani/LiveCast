@@ -8,17 +8,21 @@ import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHost
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.rememberNavController
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
-import com.dhananjay.livecast.cast.presentation.stage.StageScreen
-import com.dhananjay.livecast.cast.presentation.video.VideoScreenActivity
+import com.dhananjay.livecast.cast.ui.components.lumo.AppTheme
+import com.dhananjay.livecast.cast.ui.navigation.LiveCastNavigation
+import com.dhananjay.livecast.cast.ui.stage.StageScreen
+import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import org.koin.android.ext.android.inject
@@ -49,9 +53,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            AppTheme {
                 KoinAndroidContext {
-                    Surface(
+      
+                    Surface (
                         modifier = Modifier.fillMaxSize(), color = Color(Random.nextFloat(), Random.nextFloat(), Random.nextFloat())
                     ) {
                         val state by koinInject<SignalingClient>().devicesOnline.collectAsStateWithLifecycle(null)

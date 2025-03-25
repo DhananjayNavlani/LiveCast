@@ -18,7 +18,7 @@ package com.dhananjay.livecast.webrtc.session
 
 import android.content.Intent
 import androidx.compose.ui.geometry.Offset
-import com.dhananjay.livecast.cast.presentation.video.GestureType
+import com.dhananjay.livecast.cast.ui.video.GestureType
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import kotlinx.coroutines.flow.SharedFlow
