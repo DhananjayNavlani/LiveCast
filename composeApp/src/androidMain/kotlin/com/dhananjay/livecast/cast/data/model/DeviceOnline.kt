@@ -1,4 +1,4 @@
-package com.dhananjay.livecast.cast.model
+package com.dhananjay.livecast.cast.data.model
 
 import com.google.firebase.firestore.DocumentId
 

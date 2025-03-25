@@ -1,5 +1,7 @@
 package com.dhananjay.livecast.cast.utils
 
+import androidx.datastore.preferences.core.booleanPreferencesKey
+
 object Constants {
     const val ACTION_SEND_EVENT= "action_send_event"
     const val DATA_CHANNEL_KEY = "data_channel_key"
@@ -11,4 +13,6 @@ object Constants {
     const val ACTION_STOP_SCREEN_SHARING = "action_stop_screen_sharing"
     const val EXTRA_ON_CAPTURE_SUCCESS = "on_capture_success"
     const val EXTRA_IS_SUBSCRIBER = "is_subscriber"
+
+    val PREF_LOGIN_STATUS = booleanPreferencesKey("login_status")
 }

@@ -1,34 +1,22 @@
 package com.dhananjay.livecast
 
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavHost
-import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
 import com.dhananjay.livecast.cast.ui.components.lumo.AppTheme
 import com.dhananjay.livecast.cast.ui.navigation.LiveCastNavigation
-import com.dhananjay.livecast.cast.ui.stage.StageScreen
-import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
-import com.dhananjay.livecast.cast.utils.Constants
-import com.dhananjay.livecast.webrtc.connection.SignalingClient
+import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.KoinAndroidContext
-import org.koin.compose.koinInject
-import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
     private val viewModel by inject<MainViewModel>()
@@ -36,6 +24,12 @@ class MainActivity : ComponentActivity() {
         getSystemService(AccessibilityManager::class.java)
     }
     private val TAG = javaClass.simpleName
+    private val signInLauncher = registerForActivityResult(FirebaseAuthUIActivityResultContract()){
+        if (it.resultCode == RESULT_OK) {
+
+        } else {
+        }
+    }
 
     private fun isAccessibilityEnabled() = accessibilityManager.getEnabledAccessibilityServiceList(
         AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -45,9 +39,9 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         viewModel.addDeviceOnline()
-        if(!isAccessibilityEnabled()) {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
+//        if(!isAccessibilityEnabled()) {
+//            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+//        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,24 +49,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 KoinAndroidContext {
-      
-                    Surface (
-                        modifier = Modifier.fillMaxSize(), color = Color(Random.nextFloat(), Random.nextFloat(), Random.nextFloat())
-                    ) {
-                        val state by koinInject<SignalingClient>().devicesOnline.collectAsStateWithLifecycle(null)
-                        StageScreen(
-                            state = state,
-                            onStart = {
-                                startActivity(Intent(this, VideoScreenActivity::class.java).apply {
-                                    putExtra(Constants.EXTRA_IS_SUBSCRIBER, true)
-                                })
-                            }, onAnswer = {
-                                startActivity(Intent(this, VideoScreenActivity::class.java).apply {
-                                    putExtra(Constants.EXTRA_IS_SUBSCRIBER, false)
-                                })
-                            })
-                    }
-
+                    val controller = rememberNavController()
+                    LiveCastNavigation(
+                        controller = controller,
+                        onSignIn = {
+                            signInLauncher.launch(it)
+                        },
+                        modifier = Modifier.background(AppTheme.colors.primary).fillMaxSize()
+                    )
                 }
             }
 

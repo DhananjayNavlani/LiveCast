@@ -8,7 +8,7 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.data.services.helpers.TouchGestureHelper
-import com.dhananjay.livecast.cast.model.DeviceConfig
+import com.dhananjay.livecast.cast.data.model.DeviceConfig
 import com.dhananjay.livecast.cast.ui.video.GestureType
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManagerImpl

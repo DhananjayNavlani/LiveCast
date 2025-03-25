@@ -22,9 +22,9 @@ import android.os.Build
 import android.util.Log
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
 import com.dhananjay.livecast.cast.data.services.ScreenSharingService
-import com.dhananjay.livecast.cast.model.DeviceOnline
-import com.dhananjay.livecast.cast.model.Ice
-import com.dhananjay.livecast.cast.model.OfferAnswer
+import com.dhananjay.livecast.cast.data.model.DeviceOnline
+import com.dhananjay.livecast.cast.data.model.Ice
+import com.dhananjay.livecast.cast.data.model.OfferAnswer
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.peer.StreamPeerType
 import com.dhananjay.livecast.webrtc.session.ICE_SEPARATOR
