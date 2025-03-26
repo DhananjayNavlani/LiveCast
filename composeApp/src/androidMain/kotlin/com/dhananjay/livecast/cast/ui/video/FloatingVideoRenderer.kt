@@ -23,7 +23,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Card
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,7 +76,7 @@ fun FloatingVideoRenderer(
   val paddingOffset = density.run { 16.dp.toPx() }
 
   Card(
-    elevation = 8.dp,
+    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp),
     modifier = Modifier
       .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
       .pointerInput(parentBounds) {

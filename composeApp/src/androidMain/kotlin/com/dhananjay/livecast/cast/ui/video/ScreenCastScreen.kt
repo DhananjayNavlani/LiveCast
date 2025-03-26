@@ -50,11 +50,11 @@ enum class GestureType {
 }
 @Composable
 fun ScreenCastScreen(
-    isSubscriber: Boolean,
+    isViewer: Boolean,
     modifier: Modifier = Modifier
 ) {
     val sessionManager = LocalWebRtcSessionManager.current
-    val isSub by rememberUpdatedState(isSubscriber)
+    val isSub by rememberUpdatedState(isViewer)
 
     LaunchedEffect(key1 = Unit) {
         sessionManager.onSessionScreenReady(isSub)

@@ -53,8 +53,8 @@ class VideoScreenActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val manager = getSystemService(MediaProjectionManager::class.java)
 
-        val isSubscriber = intent.getBooleanExtra(Constants.EXTRA_IS_SUBSCRIBER, false)
-        if (!isSubscriber) {
+        val isViewer = intent.getBooleanExtra(Constants.EXTRA_IS_VIEWER, false)
+        if (!isViewer) {
             isPermissionGranted = false
             captureLauncher.launch(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -71,7 +71,7 @@ class VideoScreenActivity : ComponentActivity() {
                         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                             if(isPermissionGranted){
                                 ScreenCastScreen(
-                                    isSubscriber,
+                                    isViewer,
                                     Modifier.padding(innerPadding)
                                 )
                             } else{

@@ -22,6 +22,7 @@ fun StageScreen(
     state: DeviceOnline?,
     onStart: () -> Unit,
     onAnswer: () -> Unit,
+
     modifier: Modifier = Modifier) {
 
     Box(modifier = Modifier.fillMaxSize()) {

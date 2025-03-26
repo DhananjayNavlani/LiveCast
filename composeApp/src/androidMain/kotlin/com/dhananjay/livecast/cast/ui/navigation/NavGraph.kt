@@ -19,18 +19,20 @@ import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.firebase.ui.auth.AuthUI
 import org.koin.compose.koinInject
+import java.util.UUID
 import kotlin.random.Random
 
 @Composable
 fun LiveCastNavigation(
     controller: NavHostController,
-    onSignIn: (Intent) -> Unit,
+    onSignIn: (Intent,Boolean) -> Unit,
+    loginStatus: Boolean,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     NavHost(
         navController = controller,
-        startDestination = Routes.LoginScreen,
+        startDestination = if(loginStatus)Routes.StageScreen else Routes.LoginScreen,
         modifier = modifier
     ) {
         composable<Routes.StageScreen> {
@@ -49,7 +51,7 @@ fun LiveCastNavigation(
                                 context,
                                 VideoScreenActivity::class.java
                             ).apply {
-                                putExtra(Constants.EXTRA_IS_SUBSCRIBER, true)
+                                putExtra(Constants.EXTRA_IS_VIEWER, true)
                             })
                     }, onAnswer = {
                         context.startActivity(
@@ -57,24 +59,33 @@ fun LiveCastNavigation(
                                 context,
                                 VideoScreenActivity::class.java
                             ).apply {
-                                putExtra(Constants.EXTRA_IS_SUBSCRIBER, false)
+                                putExtra(Constants.EXTRA_IS_VIEWER, false)
                             })
                     })
             }
         }
         composable<Routes.LoginScreen> {
-            LoginScreen(isSubscriber = {
+            LoginScreen(isViewer = {
                 val intent = AuthUI.getInstance()
                     .createSignInIntentBuilder()
                     .setAvailableProviders(
                         listOf(
                             AuthUI.IdpConfig.GoogleBuilder().build(),
                             AuthUI.IdpConfig.EmailBuilder().build(),
-                            AuthUI.IdpConfig.PhoneBuilder().build()
+                            AuthUI.IdpConfig.GitHubBuilder()
+                                .setCustomParameters(mapOf(
+                                    ))
+                                .build(),
+                            AuthUI.IdpConfig.TwitterBuilder()
+                                .setCustomParameters(
+                                    mapOf(
+                                    )
+                                )
+                                .build()
                         )
                     )
                     .build()
-                onSignIn(intent)
+                onSignIn(intent, it)
             },)
         }
     }

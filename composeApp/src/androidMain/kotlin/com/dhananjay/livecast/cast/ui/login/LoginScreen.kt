@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import com.dhananjay.livecast.cast.ui.components.lumo.components.Button
 
 @Composable
-fun LoginScreen(isSubscriber:(Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun LoginScreen(isViewer:(Boolean) -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.Center,
@@ -17,14 +17,14 @@ fun LoginScreen(isSubscriber:(Boolean) -> Unit, modifier: Modifier = Modifier) {
         Button(
             text = "Sign In As Subscriber",
             onClick = {
-                isSubscriber(true)
+                isViewer(true)
             }
         )
 
         Button(
             text = "Sign In As Broadcaster",
             onClick = {
-                isSubscriber(false)
+                isViewer(false)
             }
         )
     }
