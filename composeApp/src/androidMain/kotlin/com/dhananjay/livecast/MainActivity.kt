@@ -29,9 +29,6 @@ import org.koin.androidx.compose.KoinAndroidContext
 class MainActivity : ComponentActivity() {
     private val viewModel by inject<MainViewModel>()
     private val authRepository: AuthRepository by inject()
-    private val accessibilityManager: AccessibilityManager by lazy {
-        getSystemService(AccessibilityManager::class.java)
-    }
     private var isViewer = false
     private val TAG = javaClass.simpleName
     private val signInLauncher = registerForActivityResult(FirebaseAuthUIActivityResultContract()){
@@ -55,19 +52,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun isAccessibilityEnabled() = accessibilityManager.getEnabledAccessibilityServiceList(
-        AccessibilityServiceInfo.FEEDBACK_GENERIC
-    ).any {
-        it.resolveInfo.serviceInfo.run { "$packageName/$name" } == "${packageName}/${AccessibilityService::class.java.name}"
-    }
-    override fun onStart() {
-        super.onStart()
-        viewModel.addDeviceOnline()
-//        if(!isAccessibilityEnabled()) {
-//            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-//        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -83,6 +67,9 @@ class MainActivity : ComponentActivity() {
                         }
                         ,
                         loginStatus,
+                        onLogout = {
+                            viewModel.logout()
+                        },
                         modifier = Modifier
                             .background(AppTheme.colors.primary)
                             .fillMaxSize()
@@ -93,10 +80,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        viewModel.removeDeviceOnline()
-    }
 
 }
 

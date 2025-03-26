@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.ui.login.LoginScreen
 import com.dhananjay.livecast.cast.ui.stage.StageScreen
 import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
@@ -19,7 +20,6 @@ import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.firebase.ui.auth.AuthUI
 import org.koin.compose.koinInject
-import java.util.UUID
 import kotlin.random.Random
 
 @Composable
@@ -27,6 +27,7 @@ fun LiveCastNavigation(
     controller: NavHostController,
     onSignIn: (Intent,Boolean) -> Unit,
     loginStatus: Boolean,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -40,7 +41,7 @@ fun LiveCastNavigation(
                 modifier = Modifier.fillMaxSize(),
                 color = Color(Random.nextFloat(), Random.nextFloat(), Random.nextFloat())
             ) {
-                val state by koinInject<SignalingClient>().devicesOnline.collectAsStateWithLifecycle(
+                val state by koinInject<RemoteDataSource>().devicesOnline.collectAsStateWithLifecycle(
                     null
                 )
                 StageScreen(
@@ -53,15 +54,16 @@ fun LiveCastNavigation(
                             ).apply {
                                 putExtra(Constants.EXTRA_IS_VIEWER, true)
                             })
-                    }, onAnswer = {
-                        context.startActivity(
-                            Intent(
-                                context,
-                                VideoScreenActivity::class.java
-                            ).apply {
-                                putExtra(Constants.EXTRA_IS_VIEWER, false)
-                            })
-                    })
+                    },
+                    onLogout = {
+                        onLogout()
+                        controller.navigate(Routes.LoginScreen) {
+                            popUpTo(Routes.StageScreen) {
+                                inclusive = true
+                            }
+                        }
+                    }
+                )
             }
         }
         composable<Routes.LoginScreen> {

@@ -46,4 +46,11 @@ class PreferencesRepository(
             }
         }
     }
+
+    suspend fun clearUserInfo(){
+        context.dataStore.edit { preferences ->
+            preferences.remove(Constants.PREF_USER)
+            preferences.remove(Constants.PREF_LOGIN_STATUS)
+        }
+    }
 }

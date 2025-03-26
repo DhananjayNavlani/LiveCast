@@ -1,5 +1,7 @@
 package com.dhananjay.livecast.cast.ui.stage
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -7,26 +9,35 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Button
 import androidx.compose.material.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dhananjay.livecast.cast.data.PermissionManager
 import com.dhananjay.livecast.cast.data.model.DeviceOnline
+import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
+import org.koin.compose.koinInject
 
 
 @Composable
 fun StageScreen(
     state: DeviceOnline?,
     onStart: () -> Unit,
-    onAnswer: () -> Unit,
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier,
+    preferencesRepository: PreferencesRepository = koinInject(),
+    permissionManager: PermissionManager = koinInject(),
+) {
 
-    modifier: Modifier = Modifier) {
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        var enabledCall by remember { mutableStateOf(false) }
+    val user by preferencesRepository.getUser().collectAsStateWithLifecycle(null)
+    Box(modifier = modifier.fillMaxSize()) {
 
 /*        val text = when (state) {
             WebRTCSessionState.Offline -> {
@@ -62,32 +73,55 @@ fun StageScreen(
                 fontWeight = FontWeight.Bold
             )
         }*/
-
-        Column(
-            modifier = modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
+        IconButton(
+            onClick = onLogout,
+            modifier = modifier.align(Alignment.TopEnd)
         ) {
-            Text("Count:${state?.count ?: 0}")
-            if(state?.names.orEmpty().isNotEmpty()) {
-                LazyColumn {
-                    items(state!!.names) { device ->
-                        Text(device)
+            Icon(Icons.AutoMirrored.Filled.ExitToApp,null)
+        }
+
+        if(user?.isViewer == true){
+            Column(
+                modifier = modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Count:${state?.count ?: 0}")
+                if(state?.names.orEmpty().isNotEmpty()) {
+                    LazyColumn {
+                        items(state!!.names) { device ->
+                            Text(device)
+                        }
+                    }
+
+                }
+                Button(onClick = {
+                    onStart()
+                },) {
+                    Text(text = "Start Session")
+                }
+            }
+        }else{
+            val context = LocalContext.current
+            Column(
+                modifier = modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val isEnabled = remember {
+                    permissionManager.isAccessibilityEnabled()
+                }
+                Text("Accessibility Service is ${if (isEnabled) "enabled" else "disabled"}")
+                if(!isEnabled){
+                    Button(
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        },
+                    ){
+                        Text(text = "Enable Accessibility Service")
                     }
                 }
-
-            }
-            Button(onClick = {
-                onStart()
-            },) {
-                Text(text = "Start Session")
-            }
-
-            Button(
-                onClick = onAnswer,
-            ) {
-                Text("Answer Call")
             }
         }
+
     }
 
 }

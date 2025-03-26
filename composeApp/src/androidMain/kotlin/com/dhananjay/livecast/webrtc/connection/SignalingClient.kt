@@ -60,14 +60,6 @@ class SignalingClient(
     private val answerCandidates get() = callDoc?.collection("answerCandidates")
     private var callId: String? = null
 
-    private val deviceId by lazy {
-        "${Build.FINGERPRINT}_${Build.DEVICE}_${Build.MANUFACTURER}".hashCode()
-    }
-    private val deviceName by lazy {
-        "${Build.DEVICE}_${Build.MANUFACTURER}_${Build.MODEL}"
-    }
-
-
     // signaling commands to send commands to value pairs to the subscribers
     private val _signalingCommandFlow =
         MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 10, extraBufferCapacity = 100)
@@ -122,79 +114,7 @@ class SignalingClient(
         }
     }
 
-    val devicesOnline = callbackFlow {
-        val listener = firestore.collection("rooms").document("online")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    Log.e(TAG, "Error fetching offer: $error")
-                    return@addSnapshotListener
-                }
 
-                snapshot.toObject(DeviceOnline::class.java)?.let {
-                    trySend(it)
-                }
-            }
-        awaitClose { listener.remove() }
-    }
-
-
-    suspend fun addDeviceOnline(): Boolean {
-        return try {
-            firestore.collection("rooms").document("online").let {
-                val deviceOnline = it.get().await().takeIf { it.exists() }?.toObject<DeviceOnline>()
-                val hasDevice = deviceOnline?.devices?.contains(deviceId) ?: false
-
-                Log.d(TAG, "addDeviceOnline: The collection has device ? $deviceOnline")
-                if (!hasDevice) {
-                    var count = deviceOnline?.count?.coerceAtLeast(0) ?: 0
-                    it.set(
-                        hashMapOf(
-                            "count" to ++count,
-                            "names" to FieldValue.arrayUnion(deviceName),
-                            "devices" to FieldValue.arrayUnion(deviceId)
-                        ),
-                        SetOptions.merge()
-                    ).await()
-                }
-
-            }
-
-            true
-        } catch (e: Exception) {
-            coroutineContext.ensureActive()
-            Log.e(TAG, "Error adding device online: $e")
-            false
-        }
-
-    }
-
-    suspend fun removeDeviceOnline(): Boolean {
-        return try {
-            firestore.collection("rooms").document("online").let {
-                val deviceOnline = it.get().await().takeIf { it.exists() }?.toObject<DeviceOnline>()
-                val hasDevice = deviceOnline?.devices?.contains(deviceId) ?: false
-
-                Log.d(TAG, "removeDeviceOnline: The collection has device ? $deviceOnline")
-                if (hasDevice) {
-                    var count = deviceOnline?.count?.coerceAtLeast(1) ?: 1
-                    it.set(
-                        hashMapOf(
-                            "count" to --count,
-                            "names" to FieldValue.arrayRemove(deviceName),
-                            "devices" to FieldValue.arrayRemove(deviceId)
-                        ),
-                        SetOptions.merge()
-                    ).await()
-                }
-            }
-            true
-        } catch (e: Exception) {
-            coroutineContext.ensureActive()
-            Log.e(TAG, "Error removing device online: $e")
-            false
-        }
-
-    }
 
     fun sendCommand(
         signalingCommand: SignalingCommand,

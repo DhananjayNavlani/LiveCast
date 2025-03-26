@@ -65,6 +65,8 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.bundles.webrtc.android)
             implementation(libs.stream.log.android)
+            implementation(libs.androidx.lifecycle.process)
+            implementation(libs.androidx.lifecycle.runtime)
 
             //workmanager
             implementation(libs.androidx.work)

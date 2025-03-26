@@ -2,9 +2,16 @@ package com.dhananjay.livecast
 
 import android.app.Application
 import android.app.NotificationManager
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.cast.utils.NotificationHelper
 import com.dhananjay.livecast.di.appModule
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.getKoin
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -27,6 +34,24 @@ class LivecastApp : Application() {
             channelName = R.string.notification_channel_name,
             channelDesc = R.string.notification_channel_desc
         )
+        val remoteDb = getKoin().get<RemoteDataSource>()
+
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object: DefaultLifecycleObserver{
+            override fun onStart(owner: LifecycleOwner) {
+                super.onStart(owner)
+                ProcessLifecycleOwner.get().lifecycleScope.launch(Dispatchers.IO) {
+                    remoteDb.addDeviceOnline()
+                }
+            }
+
+
+            override fun onStop(owner: LifecycleOwner) {
+                super.onStop(owner)
+                ProcessLifecycleOwner.get().lifecycleScope.launch(Dispatchers.IO) {
+                    remoteDb.removeDeviceOnline()
+                }
+            }
+        })
     }
 
 

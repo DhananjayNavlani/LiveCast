@@ -3,13 +3,13 @@ package com.dhananjay.livecast.cast.data.workers
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.utils.Constants
-import com.dhananjay.livecast.webrtc.connection.SignalingClient
 
 class DeviceOnlineWorker(
     private val appContext: Context,
     private val workerParams: WorkerParameters,
-    private val signalingClient: SignalingClient
+    private val remoteDataSource: RemoteDataSource
     ): CoroutineWorker(appContext,workerParams) {
 
     override suspend fun doWork(): Result {
@@ -17,9 +17,9 @@ class DeviceOnlineWorker(
         val isOnline = inputData.getBoolean(Constants.KEY_IS_ONLINE, false)
 
         val result = if(isOnline){
-            signalingClient.addDeviceOnline()
+            remoteDataSource.addDeviceOnline()
         }else {
-            signalingClient.removeDeviceOnline()
+            remoteDataSource.removeDeviceOnline()
         }
 
         return if(result){

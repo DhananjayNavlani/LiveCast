@@ -2,6 +2,7 @@ package com.dhananjay.livecast.di
 
 import androidx.work.WorkManager
 import com.dhananjay.livecast.MainViewModel
+import com.dhananjay.livecast.cast.data.PermissionManager
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.data.repositories.AuthRepository
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
@@ -11,6 +12,7 @@ import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManagerImpl
+import com.firebase.ui.auth.AuthUI
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.crashlytics.FirebaseCrashlytics
@@ -27,6 +29,7 @@ val appModule = module {
     single { FirebaseCrashlytics.getInstance() }
     single { FirebaseAnalytics.getInstance(get()) }
     single { FirebaseAuth.getInstance() }
+    single { AuthUI.getInstance() }
     singleOf(::SignalingClient)
     singleOf(::StreamPeerConnectionFactory)
     factoryOf(::WebRtcSessionManagerImpl) {
@@ -36,8 +39,9 @@ val appModule = module {
     singleOf(::RemoteDataSource)
     singleOf(::AuthRepository)
     singleOf(::PreferencesRepository)
+    singleOf(::PermissionManager)
     worker { DeviceOnlineWorker(get(),get(),get()) }
-    viewModel { MainViewModel(get(),get(),get(),get()) }
+    viewModel { MainViewModel(get(),get(),get()) }
     single { WorkManager.getInstance(get()) }
 }
 

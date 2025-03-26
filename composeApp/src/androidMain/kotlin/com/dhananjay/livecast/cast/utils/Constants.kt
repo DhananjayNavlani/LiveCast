@@ -1,5 +1,6 @@
 package com.dhananjay.livecast.cast.utils
 
+import android.os.Build
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 
@@ -17,4 +18,10 @@ object Constants {
 
     val PREF_LOGIN_STATUS = booleanPreferencesKey("login_status")
     val PREF_USER = stringPreferencesKey("user")
+    val DEVICE_ID by lazy {
+        "${Build.FINGERPRINT}_${Build.DEVICE}_${Build.MANUFACTURER}".hashCode()
+    }
+    val DEVICE_NAME by lazy {
+        "${Build.DEVICE}_${Build.MANUFACTURER}_${Build.MODEL}"
+    }
 }
