@@ -26,7 +26,7 @@ import org.koin.dsl.module
 
 val appModule = module {
     single { FirebaseFirestore.getInstance() }
-    single { FirebaseCrashlytics.getInstance() }
+    single <FirebaseCrashlytics>{ FirebaseCrashlytics.getInstance() }
     single { FirebaseAnalytics.getInstance(get()) }
     single { FirebaseAuth.getInstance() }
     single { AuthUI.getInstance() }

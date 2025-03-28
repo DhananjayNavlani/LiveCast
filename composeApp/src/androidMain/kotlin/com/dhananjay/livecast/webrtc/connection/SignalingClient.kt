@@ -17,20 +17,13 @@
 package com.dhananjay.livecast.webrtc.connection
 
 import android.content.Context
-import android.content.Intent
-import android.os.Build
 import android.util.Log
-import com.dhananjay.livecast.cast.data.services.AccessibilityService
-import com.dhananjay.livecast.cast.data.services.ScreenSharingService
-import com.dhananjay.livecast.cast.data.model.DeviceOnline
 import com.dhananjay.livecast.cast.data.model.Ice
 import com.dhananjay.livecast.cast.data.model.OfferAnswer
-import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.peer.StreamPeerType
 import com.dhananjay.livecast.webrtc.session.ICE_SEPARATOR
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
@@ -38,14 +31,10 @@ import com.google.firebase.firestore.toObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlin.coroutines.coroutineContext
 
 class SignalingClient(
     private val context: Context,
@@ -77,23 +66,20 @@ class SignalingClient(
                     }
 
                     snapshot.documentChanges.forEach { change ->
-                        Log.d(TAG, "The snapshot changes are ${change.type} && ${change.document.id} ")
                         val doc = change.document.toObject<OfferAnswer>()
+                        Log.d(TAG, "The snapshot changes are ${change.type} && ${doc} ")
                         when(change.type){
                             DocumentChange.Type.ADDED -> {
                                 callId = doc.id
                             }
                             DocumentChange.Type.MODIFIED -> {
                                 if(!doc.isCallActive){
-                                    Intent(context, ScreenSharingService::class.java).apply {
-                                        action = Constants.ACTION_STOP_SCREEN_SHARING
-                                    }.also {
-                                        context.startService(it)
-                                    }
+                                    _signalingCommandFlow.tryEmit(SignalingCommand.DISCONNECT to "")
                                 }
                             }
                             DocumentChange.Type.REMOVED -> {
                             }
+                            else -> {}
                         }
 
                     }
@@ -226,6 +212,10 @@ class SignalingClient(
 
                 }
             }
+
+            SignalingCommand.DISCONNECT -> {
+
+            }
         }
     }
 
@@ -263,5 +253,6 @@ enum class SignalingCommand {
     STATE, // Command for WebRTCSessionState
     OFFER, // to send or receive offer
     ANSWER, // to send or receive answer
-    ICE // to send and receive ice candidates
+    ICE, // to send and receive ice candidates
+    DISCONNECT, // to disconnect the call
 }

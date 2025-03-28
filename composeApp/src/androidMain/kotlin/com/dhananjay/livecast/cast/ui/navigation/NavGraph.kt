@@ -42,7 +42,7 @@ fun LiveCastNavigation(
                 color = Color(Random.nextFloat(), Random.nextFloat(), Random.nextFloat())
             ) {
                 val state by koinInject<RemoteDataSource>().devicesOnline.collectAsStateWithLifecycle(
-                    null
+                    emptyList()
                 )
                 StageScreen(
                     state = state,

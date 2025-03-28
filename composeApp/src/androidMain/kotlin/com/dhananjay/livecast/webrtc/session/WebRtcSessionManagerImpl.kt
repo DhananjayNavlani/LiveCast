@@ -249,6 +249,7 @@ class WebRtcSessionManagerImpl(
                         SignalingCommand.OFFER -> handleOffer(commandToValue.second)
                         SignalingCommand.ANSWER -> handleAnswer(commandToValue.second)
                         SignalingCommand.ICE -> handleIce(commandToValue.second)
+                        SignalingCommand.DISCONNECT -> handleDisconnect()
                         else -> Unit
                     }
                 }
@@ -318,7 +319,7 @@ class WebRtcSessionManagerImpl(
             videoTrack.dispose()
         }
 //        localAudioTrack.dispose()
-
+        Log.d(TAG, "disconnect: Trying to disconnect as Subscriber ? $isSubscriber ")
         if(!isSubscriber) {
             localVideoTrack.dispose()
             videoCapturer.stopCapture()
@@ -383,6 +384,11 @@ class WebRtcSessionManagerImpl(
                 iceArray[2]
             )
         )
+    }
+
+    private fun handleDisconnect(){
+
+        disconnect()
     }
 
     override fun handleScreenSharing(data: Intent) {

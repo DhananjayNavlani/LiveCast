@@ -1,10 +1,12 @@
 package com.dhananjay.livecast.cast.data.model
 
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.PropertyName
 import kotlinx.serialization.Serializable
 
 @Serializable
+@IgnoreExtraProperties
 data class LiveCastUser(
     @DocumentId
     var uid: String = "",
@@ -16,6 +18,8 @@ data class LiveCastUser(
     var photoUrl: String? = null,
     @PropertyName("is_viewer")
     var isViewer: Boolean = false,
+    @PropertyName("is_online")
+    var isOnline: Boolean = false,
     @PropertyName("is_host")
     var isAdmin: Boolean = false
 )

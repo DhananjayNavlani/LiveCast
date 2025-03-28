@@ -7,28 +7,31 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.Button
-import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.dhananjay.livecast.cast.data.PermissionManager
-import com.dhananjay.livecast.cast.data.model.DeviceOnline
+import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
+import livecast.composeapp.generated.resources.Res
+import livecast.composeapp.generated.resources.compose_multiplatform
+import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 
 
 @Composable
 fun StageScreen(
-    state: DeviceOnline?,
+    state: List<LiveCastUser>,
     onStart: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -77,45 +80,60 @@ fun StageScreen(
             onClick = onLogout,
             modifier = modifier.align(Alignment.TopEnd)
         ) {
-            Icon(Icons.AutoMirrored.Filled.ExitToApp,null)
+            Icon(Icons.AutoMirrored.Filled.ExitToApp, null)
         }
 
-        if(user?.isViewer == true){
+        Column(
+            modifier = modifier.align(Alignment.TopCenter),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            AsyncImage(
+                model = user?.photoUrl,
+                contentDescription = null,
+                placeholder = painterResource(Res.drawable.compose_multiplatform),
+                modifier = modifier
+                    .align(Alignment.CenterHorizontally)
+                    .fillMaxSize(0.2f)
+            )
+            Text("Welcome ${user?.name}")
+
+        }
+
+        if (user?.isViewer == true) {
             Column(
                 modifier = modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Count:${state?.count ?: 0}")
-                if(state?.names.orEmpty().isNotEmpty()) {
-                    LazyColumn {
-                        items(state!!.names) { device ->
-                            Text(device)
-                        }
+                Text("Online Users: [${state.size}]")
+                LazyColumn {
+                    items(state) { user ->
+                        Text(user.name)
                     }
-
                 }
-                Button(onClick = {
-                    onStart()
-                },) {
+
+                Button(
+                    onClick = {
+                        onStart()
+                    },
+                ) {
                     Text(text = "Start Session")
                 }
             }
-        }else{
+        } else {
             val context = LocalContext.current
             Column(
                 modifier = modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val isEnabled = remember {
-                    permissionManager.isAccessibilityEnabled()
-                }
+                val isEnabled = permissionManager.isAccessibilityEnabled()
+
                 Text("Accessibility Service is ${if (isEnabled) "enabled" else "disabled"}")
-                if(!isEnabled){
+                if (!isEnabled) {
                     Button(
                         onClick = {
                             context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                         },
-                    ){
+                    ) {
                         Text(text = "Enable Accessibility Service")
                     }
                 }

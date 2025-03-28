@@ -24,7 +24,7 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity android:name=".cast.ui.video.VideoScreenActivity"
-            android:exported="false"
+            android:exported="true"
             />
 
         <service

@@ -3,6 +3,7 @@ package com.dhananjay.livecast.cast.data
 import android.util.Log
 import com.dhananjay.livecast.cast.data.model.DeviceOnline
 import com.dhananjay.livecast.cast.data.model.LiveCastUser
+import com.dhananjay.livecast.cast.data.repositories.AuthRepository
 import com.dhananjay.livecast.cast.utils.Constants
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.DocumentSnapshot
@@ -18,9 +19,11 @@ import kotlin.coroutines.coroutineContext
 
 class RemoteDataSource(
     private val firestore: FirebaseFirestore,
-    private val crashlytics: FirebaseCrashlytics
+    private val crashlytics: FirebaseCrashlytics,
+    private val authRepository: AuthRepository
 ) {
     private val TAG = javaClass.simpleName
+    private val userId get() = authRepository.getCurrentUser()?.uid
     fun getConfigCollectionFlow() = callbackFlow<Result<DocumentSnapshot>> {
         val configCollectionRef = firestore.collection("config")
         val configDocumentRef = configCollectionRef.document("android")
@@ -45,16 +48,16 @@ class RemoteDataSource(
     }
 
     val devicesOnline = callbackFlow {
-        val listener = firestore.collection("rooms").document("online")
+        val listener = firestore.collection("users")
+            .whereEqualTo("is_online", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
                     Log.e(TAG, "Error fetching offer: $error")
                     return@addSnapshotListener
                 }
 
-                snapshot.toObject(DeviceOnline::class.java)?.let {
-                    trySend(it)
-                }
+                val users = snapshot.documents.mapNotNull { it.toObject<LiveCastUser>() }
+                trySend(users)
             }
         awaitClose { listener.remove() }
     }
@@ -76,7 +79,19 @@ class RemoteDataSource(
                             "devices" to FieldValue.arrayUnion(Constants.DEVICE_ID)
                         ),
                         SetOptions.merge()
-                    ).await()
+                    )
+                }
+                userId?.let { id ->
+                    firestore.collection("users").document(id).let { userDoc ->
+                        userDoc.get().await().takeIf { it.exists() }?.let {
+                            userDoc.set(
+                                mapOf(
+                                    "is_online" to true
+                                ),
+                                SetOptions.merge()
+                            )
+                        }
+                    }
                 }
 
             }
@@ -106,7 +121,19 @@ class RemoteDataSource(
                             "devices" to FieldValue.arrayRemove(Constants.DEVICE_ID)
                         ),
                         SetOptions.merge()
-                    ).await()
+                    )
+                    userId?.let { id ->
+                        firestore.collection("users").document(id).let { userDoc ->
+                            userDoc.get().await().takeIf { it.exists() }?.let {
+                                userDoc.set(
+                                    mapOf(
+                                        "is_online" to false
+                                    ),
+                                    SetOptions.merge()
+                                )
+                            }
+                        }
+                    }
                 }
             }
             true
