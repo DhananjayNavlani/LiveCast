@@ -6,10 +6,13 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.dhananjay.livecast.cast.data.services.ScreenSharingService
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
@@ -51,9 +56,17 @@ class VideoScreenActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        WindowInsetsControllerCompat(window, window.decorView).run {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+        }
         val manager = getSystemService(MediaProjectionManager::class.java)
 
         val isViewer = intent.getBooleanExtra(Constants.EXTRA_IS_VIEWER, false)
+        Log.d(TAG, "onCreate: The session manager is $sessionManager")
         if (!isViewer) {
             isPermissionGranted = false
             captureLauncher.launch(

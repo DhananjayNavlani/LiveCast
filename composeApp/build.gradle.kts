@@ -21,7 +21,6 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
     listOf(
         iosX64(),
         iosArm64(),
@@ -67,6 +66,7 @@ kotlin {
             implementation(libs.stream.log.android)
             implementation(libs.androidx.lifecycle.process)
             implementation(libs.androidx.lifecycle.runtime)
+
 
             //workmanager
             implementation(libs.androidx.work)

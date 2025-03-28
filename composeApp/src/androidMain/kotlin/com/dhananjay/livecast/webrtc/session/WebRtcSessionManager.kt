@@ -18,6 +18,7 @@ package com.dhananjay.livecast.webrtc.session
 
 import android.content.Intent
 import androidx.compose.ui.geometry.Offset
+import com.dhananjay.livecast.cast.ui.video.CallAction
 import com.dhananjay.livecast.cast.ui.video.GestureType
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
@@ -39,14 +40,11 @@ interface WebRtcSessionManager {
     fun onSessionScreenReady(isSubscriber: Boolean)
 
     fun sendEvent(start: Offset, gestureType: GestureType, end: Offset? = null)
-
-    fun flipCamera()
-
-    fun enableMicrophone(enabled: Boolean)
-
-    fun enableCamera(enabled: Boolean)
-
+    fun sendEvent(callAction: CallAction)
     fun disconnect()
-
     fun handleScreenSharing(data: Intent)
+    fun unlockDevice()
+    fun goBack()
+    fun goToRecent()
+    fun goHome()
 }

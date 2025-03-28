@@ -31,6 +31,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.core.content.getSystemService
 import com.dhananjay.livecast.cast.data.services.ScreenSharingService
+import com.dhananjay.livecast.cast.ui.video.CallAction
 import com.dhananjay.livecast.cast.ui.video.GestureType
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
@@ -75,6 +76,9 @@ class WebRtcSessionManagerImpl(
     companion object{
         private val _keyEventFlow = MutableSharedFlow<Triple<GestureType,Offset,Offset?>>()
         val keyEventFlow = _keyEventFlow.asSharedFlow()
+
+        private val _callActionFlow = MutableSharedFlow<CallAction>()
+        val callActionFlow = _callActionFlow.asSharedFlow()
     }
     private val TAG = javaClass.simpleName
     private val sessionManagerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -218,7 +222,11 @@ class WebRtcSessionManagerImpl(
                             val data = buffer.data
                             val byteArray = ByteArray(data.remaining())
                             data.get(byteArray)
-                            String(byteArray, Charsets.UTF_8).split(" ").takeIf { it.size == 3 || it.size == 5 }?.let {
+
+                            val result = String(byteArray, Charsets.UTF_8).split(" ")
+                            Log.d(TAG, "onMessage: The result is $result")
+                                result
+                                .takeIf { it.size == 5 }?.let {
                                 Log.d(TAG, "onMessage: ${it} is ${it.get(3).isBlank()}")
                                 sessionManagerScope.launch {
                                     _keyEventFlow.emit(
@@ -231,7 +239,31 @@ class WebRtcSessionManagerImpl(
                                         ))
 
                                 }
-                            } ?: Log.d(TAG, "onMessage: The message is not valid")
+                            }
+
+                            result.takeIf { it.size == 1 }?.first().let {
+                                sessionManagerScope.launch {
+                                    when(it){
+                                        CallAction.GoBack.toString() -> {
+                                            _callActionFlow.emit(CallAction.GoBack)
+                                        }
+                                        CallAction.Home.toString() -> {
+                                            _callActionFlow.emit(CallAction.Home)
+                                        }
+                                        CallAction.GoToRecent.toString() -> {
+                                            _callActionFlow.emit(CallAction.GoToRecent)
+                                        }
+                                        CallAction.UnlockDevice.toString() ->{
+                                            _callActionFlow.emit(CallAction.UnlockDevice)
+                                        }
+                                        else -> {
+                                            Log.d(TAG, "onMessage: The call action is not valid")
+                                        }
+                                    }
+
+                                }
+                            }
+
 
                         }
                     })
@@ -249,7 +281,9 @@ class WebRtcSessionManagerImpl(
                         SignalingCommand.OFFER -> handleOffer(commandToValue.second)
                         SignalingCommand.ANSWER -> handleAnswer(commandToValue.second)
                         SignalingCommand.ICE -> handleIce(commandToValue.second)
-                        SignalingCommand.DISCONNECT -> handleDisconnect()
+                        SignalingCommand.DISCONNECT -> {
+                            if (!isSubscriber) handleDisconnect()
+                        }
                         else -> Unit
                     }
                 }
@@ -294,20 +328,34 @@ class WebRtcSessionManagerImpl(
         )
     }
 
-    override fun flipCamera() {
-        (videoCapturer as? Camera2Capturer)?.switchCamera(null)
-    }
-
-    override fun enableMicrophone(enabled: Boolean) {
-        audioManager?.isMicrophoneMute = !enabled
-    }
-
-    override fun enableCamera(enabled: Boolean) {
-        if (enabled) {
-            videoCapturer.startCapture(resolution.width, resolution.height, 30)
-        } else {
-            videoCapturer.stopCapture()
+    override fun sendEvent(callAction: CallAction) {
+        if(!isSubscriber){
+            Log.d(TAG, "sendEvent: not a subscriber")
+            return
         }
+        dataChannel.send(
+            DataChannel.Buffer(
+                ByteBuffer.wrap(callAction.toString().toByteArray(Charsets.UTF_8)),
+                false
+            )
+        )
+    }
+
+
+    override fun unlockDevice() {
+        sendEvent(CallAction.UnlockDevice)
+    }
+
+    override fun goBack() {
+        sendEvent(CallAction.GoBack)
+    }
+
+    override fun goHome() {
+        sendEvent(CallAction.Home)
+    }
+
+    override fun goToRecent() {
+        sendEvent(CallAction.GoToRecent)
     }
 
     override fun disconnect() {
@@ -319,17 +367,19 @@ class WebRtcSessionManagerImpl(
             videoTrack.dispose()
         }
 //        localAudioTrack.dispose()
-        Log.d(TAG, "disconnect: Trying to disconnect as Subscriber ? $isSubscriber ")
+        Log.d(TAG, "disconnect: as Subscriber ? $isSubscriber && offer null? ${offer == null} ")
         if(!isSubscriber) {
-            localVideoTrack.dispose()
-            videoCapturer.stopCapture()
-            videoCapturer.dispose()
+            if(!localVideoTrack.isDisposed) {
+                localVideoTrack.dispose()
+                videoCapturer.stopCapture()
+                videoCapturer.dispose()
+            }
             Intent(context, ScreenSharingService::class.java).apply {
                 action = Constants.ACTION_STOP_SCREEN_SHARING
             }.also {
                 context.startService(it)
             }
-        }else{
+        } else{
             signalingClient.disconnectCall()
         }
 
@@ -387,7 +437,6 @@ class WebRtcSessionManagerImpl(
     }
 
     private fun handleDisconnect(){
-
         disconnect()
     }
 

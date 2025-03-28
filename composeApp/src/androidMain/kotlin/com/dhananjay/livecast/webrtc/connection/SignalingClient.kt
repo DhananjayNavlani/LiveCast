@@ -51,7 +51,7 @@ class SignalingClient(
 
     // signaling commands to send commands to value pairs to the subscribers
     private val _signalingCommandFlow =
-        MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 10, extraBufferCapacity = 100)
+        MutableSharedFlow<Pair<SignalingCommand, String>>()
     val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
 
     init {
@@ -74,12 +74,13 @@ class SignalingClient(
                             }
                             DocumentChange.Type.MODIFIED -> {
                                 if(!doc.isCallActive){
-                                    _signalingCommandFlow.tryEmit(SignalingCommand.DISCONNECT to "")
+                                    signalingScope.launch {
+                                        _signalingCommandFlow.emit(SignalingCommand.DISCONNECT to "")
+                                    }
                                 }
                             }
-                            DocumentChange.Type.REMOVED -> {
+                            else -> {
                             }
-                            else -> {}
                         }
 
                     }
@@ -89,7 +90,9 @@ class SignalingClient(
                         callDoc!!.get().addOnSuccessListener {
                             it.toObject(OfferAnswer::class.java)?.let {
                                 if (it.isOffer) {
-                                    _signalingCommandFlow.tryEmit(SignalingCommand.OFFER to it.sdp)
+                                    signalingScope.launch {
+                                        _signalingCommandFlow.emit(SignalingCommand.OFFER to it.sdp)
+                                    }
                                 }
                             }
                         }
@@ -131,7 +134,9 @@ class SignalingClient(
 
                     snapshot.toObject(OfferAnswer::class.java)?.let {
                         if (!it.isOffer) {
-                            _signalingCommandFlow.tryEmit(SignalingCommand.ANSWER to it.sdp)
+                            signalingScope.launch {
+                                _signalingCommandFlow.emit(SignalingCommand.ANSWER to it.sdp)
+                            }
                         }
                     }
                 }
@@ -146,7 +151,9 @@ class SignalingClient(
                     snapshot.documentChanges.forEach { change ->
                         if (change.type == DocumentChange.Type.ADDED) {
                             change.document.toObject(Ice::class.java).let {
-                                _signalingCommandFlow.tryEmit(SignalingCommand.ICE to it.toString())
+                                signalingScope. launch {
+                                    _signalingCommandFlow.emit(SignalingCommand.ICE to it.toString())
+                                }
                             }
                         }
                     }
@@ -180,7 +187,9 @@ class SignalingClient(
                             snapshot.documentChanges.forEach { change ->
                                 if (change.type == DocumentChange.Type.ADDED) {
                                     change.document.toObject(Ice::class.java).let {
-                                        _signalingCommandFlow.tryEmit(SignalingCommand.ICE to it.toString())
+                                        signalingScope.launch {
+                                            _signalingCommandFlow.emit(SignalingCommand.ICE to it.toString())
+                                        }
                                     }
                                 }
                             }

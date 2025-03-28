@@ -75,6 +75,11 @@ class TouchGestureHelper {
             duration: Long = SWIPE_DURATION,
             callback: ((Boolean) -> Unit)? = null
         ): Boolean {
+            if(startX < 0 || startY < 0 || endX < 0 || endY < 0){
+                Log.e("TouchGestureHelper", "Invalid coordinates for swipe")
+                callback?.invoke(false)
+                return false
+            }
             val path = Path()
             path.moveTo(startX, startY)
             path.lineTo(endX, endY)

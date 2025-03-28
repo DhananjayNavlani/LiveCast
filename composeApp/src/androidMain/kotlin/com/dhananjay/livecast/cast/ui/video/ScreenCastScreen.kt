@@ -1,6 +1,7 @@
 package com.dhananjay.livecast.cast.ui.video
 
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -46,7 +47,7 @@ enum class GestureType {
     SWIPE_UP,
     SWIPE_DOWN,
     SWIPE_LEFT,
-    SWIPE_RIGHT
+    SWIPE_RIGHT,
 }
 @Composable
 fun ScreenCastScreen(
@@ -56,7 +57,11 @@ fun ScreenCastScreen(
     val sessionManager = LocalWebRtcSessionManager.current
     val isSub by rememberUpdatedState(isViewer)
 
+    BackHandler {
+
+    }
     LaunchedEffect(key1 = Unit) {
+        Log.d("ScreenCast", "ScreenCastScreen: is Sub ? $isSub ")
         sessionManager.onSessionScreenReady(isSub)
     }
 
@@ -124,13 +129,16 @@ fun ScreenCastScreen(
             // Transform Gestures: detect multi-touch transforms (pinch, zoom, and rotation)
             .pointerInput(Unit) {
                 detectTransformGestures { centroid, pan, zoom, rotation ->
-                    Log.d("GestureDetection", "Transform: centroid=$centroid, pan=$pan, zoom=$zoom, rotation=$rotation")
+                    Log.d(
+                        "GestureDetection",
+                        "Transform: centroid=$centroid, pan=$pan, zoom=$zoom, rotation=$rotation"
+                    )
                     sessionManager.sendEvent(centroid, GestureType.PINCH)
                     sessionManager.sendEvent(centroid, GestureType.ZOOM)
                     sessionManager.sendEvent(centroid, GestureType.ROTATE)
                 }
             }
-            .pointerInput (Unit){
+            .pointerInput(Unit) {
                 var start = Offset.Zero
                 detectVerticalDragGestures(
                     onDragStart = {
@@ -138,18 +146,18 @@ fun ScreenCastScreen(
                     }
                 ) { change, dragAmount ->
                     val end = change.position
-                    if(dragAmount > 0){
+                    if (dragAmount > 0) {
                         //swipe down
                         Log.d("GestureDetection", "Swipe Down: $dragAmount")
                         sessionManager.sendEvent(start, GestureType.SWIPE_DOWN, end)
-                    } else{
+                    } else {
                         //swipe up
                         Log.d("GestureDetection", "Swipe Up: $dragAmount")
                         sessionManager.sendEvent(start, GestureType.SWIPE_UP, end)
                     }
                 }
             }
-            .pointerInput(Unit){
+            .pointerInput(Unit) {
                 var start = Offset.Zero
                 detectHorizontalDragGestures(
                     onDragStart = {
@@ -158,11 +166,11 @@ fun ScreenCastScreen(
                     }
                 ) { change, dragAmount ->
                     val end = change.position
-                    if(dragAmount > 0){
+                    if (dragAmount > 0) {
                         //swipe right
                         Log.d("GestureDetection", "Swipe Right: $dragAmount")
                         sessionManager.sendEvent(start, GestureType.SWIPE_RIGHT, end)
-                    } else{
+                    } else {
                         //swipe left
                         Log.d("GestureDetection", "Swipe Left: $dragAmount")
                         sessionManager.sendEvent(change.position, GestureType.SWIPE_LEFT, end)
@@ -210,21 +218,22 @@ fun ScreenCastScreen(
             callMediaState = callMediaState,
             onCallAction = {
                 when (it) {
-                    is CallAction.ToggleMicroPhone -> {
-                        val enabled = callMediaState.isMicrophoneEnabled.not()
-                        callMediaState = callMediaState.copy(isMicrophoneEnabled = enabled)
-//                        sessionManager.enableMicrophone(enabled)
+                    is CallAction.UnlockDevice -> {
+                        sessionManager.unlockDevice()
                     }
-                    is CallAction.ToggleCamera -> {
-                        val enabled = callMediaState.isCameraEnabled.not()
-                        callMediaState = callMediaState.copy(isCameraEnabled = enabled)
-//                        sessionManager.enableCamera(enabled)
-                    }
-                    CallAction.FlipCamera -> {
-//                        sessionManager.flipCamera()
-                    }
+
                     CallAction.LeaveCall -> {
                         activity?.finish()
+                    }
+
+                    CallAction.GoBack -> {
+                        sessionManager.goBack()
+                    }
+                    CallAction.GoToRecent -> {
+                        sessionManager.goToRecent()
+                    }
+                    CallAction.Home -> {
+                        sessionManager.goHome()
                     }
                 }
             }

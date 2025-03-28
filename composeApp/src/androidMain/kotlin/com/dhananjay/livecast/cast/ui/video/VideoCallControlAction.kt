@@ -22,17 +22,16 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import com.dhananjay.livecast.R
 import com.dhananjay.livecast.cast.ui.style.Disabled
+import com.dhananjay.livecast.cast.ui.style.Primary
 
 sealed class CallAction {
-  data class ToggleMicroPhone(
-    val isEnabled: Boolean
-  ) : CallAction()
 
-  data class ToggleCamera(
-    val isEnabled: Boolean
-  ) : CallAction()
 
-  data object FlipCamera : CallAction()
+  data object UnlockDevice : CallAction()
+
+  data object GoToRecent : CallAction()
+  data object Home : CallAction()
+  data object GoBack : CallAction()
 
   data object LeaveCall : CallAction()
 }
@@ -66,24 +65,31 @@ fun buildDefaultCallControlActions(
   )
 
   return listOf(
-//    VideoCallControlAction(
-//      icon = microphoneIcon,
-//      iconTint = Color.White,
-//      background = Primary,
-//      callAction = CallAction.ToggleMicroPhone(callMediaState.isMicrophoneEnabled)
-//    ),
-//    VideoCallControlAction(
-//      icon = cameraIcon,
-//      iconTint = Color.White,
-//      background = Primary,
-//      callAction = CallAction.ToggleCamera(callMediaState.isCameraEnabled)
-//    ),
-//    VideoCallControlAction(
-//      icon = painterResource(id = R.drawable.ic_camera_flip),
-//      iconTint = Color.White,
-//      background = Primary,
-//      callAction = CallAction.FlipCamera
-//    ),
+
+    VideoCallControlAction(
+      icon = painterResource(id = R.drawable.ic_power),
+      iconTint = Color.White,
+      background = Primary,
+      callAction = CallAction.UnlockDevice
+    ),
+    VideoCallControlAction(
+      icon = painterResource(id = R.drawable.ic_back),
+      iconTint = Color.White,
+      background = Primary,
+      callAction = CallAction.GoBack
+    ),
+    VideoCallControlAction(
+      icon = painterResource(id = R.drawable.ic_home),
+      iconTint = Color.White,
+      background = Primary,
+      callAction = CallAction.Home
+    ),
+    VideoCallControlAction(
+      icon = painterResource(id = R.drawable.ic_recent),
+      iconTint = Color.White,
+      background = Primary,
+      callAction = CallAction.GoToRecent),
+
     VideoCallControlAction(
       icon = painterResource(id = R.drawable.ic_call_end),
       iconTint = Color.White,

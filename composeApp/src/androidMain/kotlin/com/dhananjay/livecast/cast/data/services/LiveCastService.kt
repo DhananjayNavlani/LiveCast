@@ -1,14 +1,20 @@
 package com.dhananjay.livecast.cast.data.services
 
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.PowerManager
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.data.model.DeviceConfig
 import com.dhananjay.livecast.cast.data.services.helpers.TouchGestureHelper
+import com.dhananjay.livecast.cast.ui.video.CallAction
 import com.dhananjay.livecast.cast.ui.video.GestureType
 import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
@@ -37,6 +43,27 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
     }
 
     fun onEvent(event: AccessibilityEvent) {
+        if((event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) && event.className == "com.android.systemui.mediaprojection.permission.MediaProjectionPermissionActivity"){
+            Log.d(TAG, "Normal event info: $event ")
+            Log.d(TAG, "Node with start: ${rootInActiveWindow.findAccessibilityNodeInfosByText("Start")}")
+            printInActiveWindow(rootInActiveWindow)
+            rootInActiveWindow.findAccessibilityNodeInfosByViewId("android:id/button1").first().performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }
+    }
+    
+    fun printInActiveWindow(node: AccessibilityNodeInfo){
+        val count = node.childCount
+        if(count == 0 ) return
+        val indent = " "
+        Log.d(TAG, "Node info in current window ----> ")
+        for( i in 0 until count){
+            val child = node.getChild(i)
+            Log.d(TAG, " ${indent.repeat(i)}: ${child.className} ${child.text} ${child.contentDescription} ${child.isClickable} ${child.viewIdResourceName}")
+            if(child.childCount > 0){
+                printInActiveWindow(child)
+            }
+        }
     }
 
 
@@ -98,16 +125,62 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
         }
 
         serviceScope.launch {
+            WebRtcSessionManagerImpl.callActionFlow.collectLatest {
+                when(it){
+                    CallAction.Home -> {
+                        performGlobalAction(GLOBAL_ACTION_HOME)
+                    }
+                    CallAction.GoBack -> {
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
+                    CallAction.GoToRecent -> {
+                        performGlobalAction(GLOBAL_ACTION_RECENTS)
+                    }
+                    CallAction.UnlockDevice -> {
+                        unlockDevice()
+                    }
+
+                    CallAction.LeaveCall -> {
+
+                    }
+                }
+            }
+        }
+        serviceScope.launch {
             signalingClient.signalingCommandFlow.collectLatest {
                 if(it.first == SignalingCommand.OFFER){
-                    startActivity(Intent(context, VideoScreenActivity::class.java))
+                    Log.d(TAG, "startObservers: offer received at ${OffsetDateTime.now()}")
+                    startActivity(Intent(context, VideoScreenActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    })
                 }
             }
         }
 
     }
 
+    fun unlockDevice() {
+        // Acquire wake lock and disable keyguard
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wakeLock = powerManager.newWakeLock(
+            PowerManager.FULL_WAKE_LOCK or
+                    PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            "UnlockService:WakeLock"
+        )
+        wakeLock.acquire(10000) // Hold wake lock for 10 seconds
 
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+
+        // For Android Oreo and above
+        val keyguardLock = keyguardManager.newKeyguardLock("UnlockService")
+        keyguardLock.disableKeyguard()
+
+        // Perform global actions
+        performGlobalAction(GESTURE_SWIPE_UP)
+
+        // Note: Actually unlocking requires user interaction or specific device policies
+        wakeLock.release()
+    }
 
     override fun onUnbind(intent: Intent?): Boolean {
         crashlytics.setCustomKey(
