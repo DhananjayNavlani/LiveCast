@@ -22,6 +22,7 @@ import com.dhananjay.livecast.cast.data.model.Ice
 import com.dhananjay.livecast.cast.data.model.OfferAnswer
 import com.dhananjay.livecast.webrtc.peer.StreamPeerType
 import com.dhananjay.livecast.webrtc.session.ICE_SEPARATOR
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
@@ -51,7 +52,7 @@ class SignalingClient(
 
     // signaling commands to send commands to value pairs to the subscribers
     private val _signalingCommandFlow =
-        MutableSharedFlow<Pair<SignalingCommand, String>>()
+        MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 1)
     val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
 
     init {
@@ -67,10 +68,23 @@ class SignalingClient(
 
                     snapshot.documentChanges.forEach { change ->
                         val doc = change.document.toObject<OfferAnswer>()
-                        Log.d(TAG, "The snapshot changes are ${change.type} && ${doc} ")
+                        Log.d(TAG, "The snapshot changes are ${change.type} && ${doc.id} && ${doc.isCallActive} && ${doc.sdp.length} && ${doc.isOffer} && ${doc.timestamp} ")
                         when(change.type){
                             DocumentChange.Type.ADDED -> {
-                                callId = doc.id
+                                callId = if(Timestamp.now().seconds - doc.timestamp.seconds < 10) doc.id else null
+                                callId?.let {
+                                    callDoc = firestore.collection("calls").document(it)
+
+                                    callDoc!!.get().addOnSuccessListener {
+                                        it.toObject(OfferAnswer::class.java)?.let {
+                                            if (it.isOffer) {
+                                                signalingScope.launch {
+                                                    _signalingCommandFlow.emit(SignalingCommand.OFFER to it.sdp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             DocumentChange.Type.MODIFIED -> {
                                 if(!doc.isCallActive){
@@ -84,19 +98,7 @@ class SignalingClient(
                         }
 
                     }
-                    callId?.let {
-                        callDoc = firestore.collection("calls").document(it)
 
-                        callDoc!!.get().addOnSuccessListener {
-                            it.toObject(OfferAnswer::class.java)?.let {
-                                if (it.isOffer) {
-                                    signalingScope.launch {
-                                        _signalingCommandFlow.emit(SignalingCommand.OFFER to it.sdp)
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
 
 

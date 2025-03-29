@@ -44,9 +44,9 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
 
     fun onEvent(event: AccessibilityEvent) {
         if((event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) && event.className == "com.android.systemui.mediaprojection.permission.MediaProjectionPermissionActivity"){
-            Log.d(TAG, "Normal event info: $event ")
-            Log.d(TAG, "Node with start: ${rootInActiveWindow.findAccessibilityNodeInfosByText("Start")}")
-            printInActiveWindow(rootInActiveWindow)
+//            Log.d(TAG, "Normal event info: $event ")
+//            Log.d(TAG, "Node with start: ${rootInActiveWindow.findAccessibilityNodeInfosByText("Start")}")
+//            printInActiveWindow(rootInActiveWindow)
             rootInActiveWindow.findAccessibilityNodeInfosByViewId("android:id/button1").first().performAction(AccessibilityNodeInfo.ACTION_CLICK)
             performGlobalAction(GLOBAL_ACTION_HOME)
         }
@@ -76,6 +76,7 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
 
     private fun startObservers() {
         serviceScope.launch {
+            remoteDataSource.addDeviceOnline()
             remoteDataSource.getConfigCollectionFlow().distinctUntilChanged().collectLatest {
                 it.onSuccess { document ->
                     val config = document.toObject<DeviceConfig>() ?: return@onSuccess
@@ -159,7 +160,7 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
 
     }
 
-    fun unlockDevice() {
+    private fun unlockDevice() {
         // Acquire wake lock and disable keyguard
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = powerManager.newWakeLock(
@@ -183,6 +184,9 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        serviceScope.launch {
+            remoteDataSource.removeDeviceOnline()
+        }
         crashlytics.setCustomKey(
             "onUnbind",
             "Accessbility service unbound at ${OffsetDateTime.now()}"

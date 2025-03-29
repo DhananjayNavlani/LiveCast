@@ -2,8 +2,10 @@ package com.dhananjay.livecast.cast.data.model
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.PropertyName
 
+@IgnoreExtraProperties
 data class OfferAnswer(
     @DocumentId
     var id: String = "",

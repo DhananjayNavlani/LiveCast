@@ -34,24 +34,7 @@ class LivecastApp : Application() {
             channelName = R.string.notification_channel_name,
             channelDesc = R.string.notification_channel_desc
         )
-        val remoteDb = getKoin().get<RemoteDataSource>()
 
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object: DefaultLifecycleObserver{
-            override fun onStart(owner: LifecycleOwner) {
-                super.onStart(owner)
-                ProcessLifecycleOwner.get().lifecycleScope.launch(Dispatchers.IO) {
-                    remoteDb.addDeviceOnline()
-                }
-            }
-
-
-            override fun onStop(owner: LifecycleOwner) {
-                super.onStop(owner)
-                ProcessLifecycleOwner.get().lifecycleScope.launch(Dispatchers.IO) {
-                    remoteDb.removeDeviceOnline()
-                }
-            }
-        })
     }
 
 

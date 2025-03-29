@@ -308,9 +308,11 @@ class WebRtcSessionManagerImpl(
             if (isSubscriber) {
                 sendOffer()
             } else {
-                peerConnection.connection.addTrack(localVideoTrack)
-                _localVideoTrackFlow.emit(localVideoTrack)
-                sendAnswer()
+                if(offer != null){
+                    peerConnection.connection.addTrack(localVideoTrack)
+                    _localVideoTrackFlow.emit(localVideoTrack)
+                    sendAnswer()
+                }
             }
         }
     }
@@ -366,7 +368,6 @@ class WebRtcSessionManagerImpl(
         localVideoTrackFlow.replayCache.forEach { videoTrack ->
             videoTrack.dispose()
         }
-//        localAudioTrack.dispose()
         Log.d(TAG, "disconnect: as Subscriber ? $isSubscriber && offer null? ${offer == null} ")
         if(!isSubscriber) {
             if(!localVideoTrack.isDisposed) {
@@ -383,9 +384,6 @@ class WebRtcSessionManagerImpl(
             signalingClient.disconnectCall()
         }
 
-        // dispose audio handler and video capturer.
-        // audioHandler.stop()
-        // dispose signaling clients and socket.
 
         signalingClient.dispose()
     }
@@ -413,7 +411,7 @@ class WebRtcSessionManagerImpl(
     }
 
     private fun handleOffer(sdp: String) {
-        Log.d(TAG,"[SDP] handle offer:" )
+        Log.d(TAG,"[SDP] handle offer: ${sdp.length}" )
         offer = sdp
     }
 
