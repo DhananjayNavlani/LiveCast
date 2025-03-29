@@ -68,6 +68,11 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtime)
 
 
+            implementation(libs.androidx.datastore.preferences)
+            implementation(libs.androidx.datastore.preferences.core)
+            implementation(libs.coil.network)
+
+
             //workmanager
             implementation(libs.androidx.work)
 
@@ -91,14 +96,11 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
 
-            implementation(libs.coil.network)
             implementation(libs.coil.compose)
 
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
 
-            implementation(libs.androidx.datastore.preferences)
-            implementation(libs.androidx.datastore.preferences.core)
 
         }
         desktopMain.dependencies {

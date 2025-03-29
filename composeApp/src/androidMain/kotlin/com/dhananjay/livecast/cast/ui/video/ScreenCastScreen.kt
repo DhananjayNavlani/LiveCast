@@ -30,8 +30,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
 import com.dhananjay.livecast.cast.ui.components.VideoRenderer
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
+import kotlinx.coroutines.flow.first
+import org.koin.compose.koinInject
 
 enum class GestureType {
     TAP,
@@ -52,7 +55,8 @@ enum class GestureType {
 @Composable
 fun ScreenCastScreen(
     isViewer: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    preferencesRepository: PreferencesRepository = koinInject()
 ) {
     val sessionManager = LocalWebRtcSessionManager.current
     val isSub by rememberUpdatedState(isViewer)

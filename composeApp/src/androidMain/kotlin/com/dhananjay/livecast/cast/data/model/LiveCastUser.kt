@@ -20,6 +20,8 @@ data class LiveCastUser(
     var isViewer: Boolean = false,
     @PropertyName("is_online")
     var isOnline: Boolean = false,
-    @PropertyName("is_host")
-    var isAdmin: Boolean = false
+    @PropertyName("width_pixels")
+    var widthPixels: Int = 0,
+    @PropertyName("height_pixels")
+    var heightPixels: Int = 0,
 )

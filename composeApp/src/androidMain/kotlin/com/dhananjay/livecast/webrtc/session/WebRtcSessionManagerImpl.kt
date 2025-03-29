@@ -30,6 +30,8 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.core.content.getSystemService
+import com.dhananjay.livecast.cast.data.model.LiveCastUser
+import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
 import com.dhananjay.livecast.cast.data.services.ScreenSharingService
 import com.dhananjay.livecast.cast.ui.video.CallAction
 import com.dhananjay.livecast.cast.ui.video.GestureType
@@ -45,7 +47,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.webrtc.AudioTrack
 import org.webrtc.Camera2Capturer
 import org.webrtc.Camera2Enumerator
@@ -71,6 +75,7 @@ class WebRtcSessionManagerImpl(
     private val context: Context,
     override val signalingClient: SignalingClient,
     override val peerConnectionFactory: StreamPeerConnectionFactory,
+    private val preferencesRepository: PreferencesRepository,
 ) : WebRtcSessionManager {
 
     companion object{
@@ -103,6 +108,11 @@ class WebRtcSessionManagerImpl(
     }
 
     override var isSubscriber: Boolean = false
+    var remoteUser: LiveCastUser? = null
+    private suspend fun getUser(): LiveCastUser? {
+        return preferencesRepository.getUser().firstOrNull()
+    }
+
 
     // getting front camera
 /*    private val videoCapturer: VideoCapturer by lazy {
@@ -148,6 +158,13 @@ class WebRtcSessionManagerImpl(
             source = videoSource,
             trackId = "Video${UUID.randomUUID()}"
         )
+    }
+
+    private val widthPixels by lazy {
+        context.resources.displayMetrics.widthPixels
+    }
+    private val heightPixels by lazy {
+        context.resources.displayMetrics.heightPixels
     }
 
     /** Audio properties */
@@ -221,6 +238,9 @@ class WebRtcSessionManagerImpl(
                         override fun onMessage(buffer: DataChannel.Buffer) {
                             val data = buffer.data
                             val byteArray = ByteArray(data.remaining())
+                            val scaleX =
+                                remoteUser!!.widthPixels.toFloat() / widthPixels
+                            val scaleY = remoteUser!!.heightPixels.toFloat() / heightPixels
                             data.get(byteArray)
 
                             val result = String(byteArray, Charsets.UTF_8).split(" ")
@@ -232,9 +252,9 @@ class WebRtcSessionManagerImpl(
                                     _keyEventFlow.emit(
                                         Triple(
                                             GestureType.valueOf(it.last()),
-                                            Offset(it[0].toFloat(), it[1].toFloat()),
+                                            Offset(it[0].toFloat() * scaleX, it[1].toFloat() * scaleY),
                                             if(it[2].isNotBlank() && it[3].isNotBlank()) {
-                                                Offset(it[2].toFloat(), it[3].toFloat())
+                                                Offset(it[2].toFloat() * scaleX, it[3].toFloat() * scaleY)
                                             } else null
                                         ))
 
@@ -278,7 +298,7 @@ class WebRtcSessionManagerImpl(
             signalingClient.signalingCommandFlow
                 .collect { commandToValue ->
                     when (commandToValue.first) {
-                        SignalingCommand.OFFER -> handleOffer(commandToValue.second)
+                        SignalingCommand.OFFER -> handleOffer(commandToValue.second, commandToValue.third)
                         SignalingCommand.ANSWER -> handleAnswer(commandToValue.second)
                         SignalingCommand.ICE -> handleIce(commandToValue.second)
                         SignalingCommand.DISCONNECT -> {
@@ -306,7 +326,7 @@ class WebRtcSessionManagerImpl(
         sessionManagerScope.launch {
             // sending local video track to show local video from start
             if (isSubscriber) {
-                sendOffer()
+                sendOffer(getUser()?.uid ?: "")
             } else {
                 if(offer != null){
                     peerConnection.connection.addTrack(localVideoTrack)
@@ -388,12 +408,12 @@ class WebRtcSessionManagerImpl(
         signalingClient.dispose()
     }
 
-    private suspend fun sendOffer() {
+    private suspend fun sendOffer(uid: String) {
         offer = null
         val offer = peerConnection.createOffer().getOrThrow()
         val result = peerConnection.setLocalDescription(offer)
         result.onSuccess {
-            signalingClient.sendCommand(SignalingCommand.OFFER, offer.description)
+            signalingClient.sendCommand(SignalingCommand.OFFER, offer.description, viewerUserId = uid)
         }
         Log.d(TAG,"[SDP] send offer: ${offer.type}" )
     }
@@ -410,9 +430,10 @@ class WebRtcSessionManagerImpl(
         Log.d(TAG,"[SDP] send answer: ${answer.type}" )
     }
 
-    private fun handleOffer(sdp: String) {
+    private fun handleOffer(sdp: String, remoteUser: LiveCastUser?) {
         Log.d(TAG,"[SDP] handle offer: ${sdp.length}" )
         offer = sdp
+        this.remoteUser = remoteUser
     }
 
     private suspend fun handleAnswer(sdp: String) {

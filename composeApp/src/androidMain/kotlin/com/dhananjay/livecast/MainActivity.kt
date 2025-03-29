@@ -45,7 +45,9 @@ class MainActivity : ComponentActivity() {
                 user.email,
                 user.phoneNumber,
                 user.photoUrl.toString(),
-                isViewer = isViewer
+                isViewer = isViewer,
+                widthPixels = resources.displayMetrics.widthPixels,
+                heightPixels = resources.displayMetrics.heightPixels,
             ))
         } else{
             Toast.makeText(this, "Something went wrong", Toast.LENGTH_SHORT).show()

@@ -19,6 +19,7 @@ package com.dhananjay.livecast.webrtc.connection
 import android.content.Context
 import android.util.Log
 import com.dhananjay.livecast.cast.data.model.Ice
+import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.data.model.OfferAnswer
 import com.dhananjay.livecast.webrtc.peer.StreamPeerType
 import com.dhananjay.livecast.webrtc.session.ICE_SEPARATOR
@@ -52,8 +53,8 @@ class SignalingClient(
 
     // signaling commands to send commands to value pairs to the subscribers
     private val _signalingCommandFlow =
-        MutableSharedFlow<Pair<SignalingCommand, String>>(replay = 1)
-    val signalingCommandFlow: SharedFlow<Pair<SignalingCommand, String>> = _signalingCommandFlow
+        MutableSharedFlow<Triple<SignalingCommand, String, LiveCastUser?>>(replay = 1)
+    val signalingCommandFlow: SharedFlow<Triple<SignalingCommand, String, LiveCastUser?>> = _signalingCommandFlow
 
     init {
         signalingScope.launch {
@@ -79,7 +80,8 @@ class SignalingClient(
                                         it.toObject(OfferAnswer::class.java)?.let {
                                             if (it.isOffer) {
                                                 signalingScope.launch {
-                                                    _signalingCommandFlow.emit(SignalingCommand.OFFER to it.sdp)
+                                                    val user = firestore.collection("users").document(doc.viewerUserId?:"").get().await().toObject<LiveCastUser>()
+                                                    _signalingCommandFlow.emit(Triple(SignalingCommand.OFFER, it.sdp, user))
                                                 }
                                             }
                                         }
@@ -89,7 +91,7 @@ class SignalingClient(
                             DocumentChange.Type.MODIFIED -> {
                                 if(!doc.isCallActive){
                                     signalingScope.launch {
-                                        _signalingCommandFlow.emit(SignalingCommand.DISCONNECT to "")
+                                        _signalingCommandFlow.emit(Triple(SignalingCommand.DISCONNECT, "", null))
                                     }
                                 }
                             }
@@ -110,7 +112,8 @@ class SignalingClient(
     fun sendCommand(
         signalingCommand: SignalingCommand,
         message: String,
-        type: StreamPeerType = StreamPeerType.PUBLISHER
+        type: StreamPeerType = StreamPeerType.PUBLISHER,
+        viewerUserId: String? = null
     ) {
         when (signalingCommand) {
             SignalingCommand.STATE -> {
@@ -123,7 +126,8 @@ class SignalingClient(
                 callDoc!!.set(
                     OfferAnswer(
                         sdp = message,
-                        isOffer = true
+                        isOffer = true,
+                        viewerUserId = viewerUserId,
                     )
                 )
 
@@ -137,7 +141,7 @@ class SignalingClient(
                     snapshot.toObject(OfferAnswer::class.java)?.let {
                         if (!it.isOffer) {
                             signalingScope.launch {
-                                _signalingCommandFlow.emit(SignalingCommand.ANSWER to it.sdp)
+                                _signalingCommandFlow.emit(Triple(SignalingCommand.ANSWER, it.sdp, null))
                             }
                         }
                     }
@@ -154,7 +158,7 @@ class SignalingClient(
                         if (change.type == DocumentChange.Type.ADDED) {
                             change.document.toObject(Ice::class.java).let {
                                 signalingScope. launch {
-                                    _signalingCommandFlow.emit(SignalingCommand.ICE to it.toString())
+                                    _signalingCommandFlow.emit(Triple(SignalingCommand.ICE, it.toString(), null))
                                 }
                             }
                         }
@@ -190,7 +194,7 @@ class SignalingClient(
                                 if (change.type == DocumentChange.Type.ADDED) {
                                     change.document.toObject(Ice::class.java).let {
                                         signalingScope.launch {
-                                            _signalingCommandFlow.emit(SignalingCommand.ICE to it.toString())
+                                            _signalingCommandFlow.emit(Triple(SignalingCommand.ICE, it.toString(), null))
                                         }
                                     }
                                 }
@@ -237,11 +241,7 @@ class SignalingClient(
     fun disconnectCall(){
         signalingScope.launch {
             callDoc?.set(
-                OfferAnswer(
-                    sdp = "",
-                    isOffer = false,
-                    isCallActive = false
-                ),
+                mapOf("is_call_active" to false),
                 SetOptions.merge()
             )?.await()
         }

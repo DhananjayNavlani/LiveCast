@@ -18,6 +18,7 @@ package com.dhananjay.livecast.webrtc.session
 
 import android.content.Intent
 import androidx.compose.ui.geometry.Offset
+import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.ui.video.CallAction
 import com.dhananjay.livecast.cast.ui.video.GestureType
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
