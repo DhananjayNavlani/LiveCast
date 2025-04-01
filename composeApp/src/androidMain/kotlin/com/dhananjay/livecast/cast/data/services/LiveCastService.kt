@@ -6,7 +6,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
@@ -43,24 +42,32 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
     }
 
     fun onEvent(event: AccessibilityEvent) {
-        if((event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) && event.className == "com.android.systemui.mediaprojection.permission.MediaProjectionPermissionActivity"){
+        if ((event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)) {
 //            Log.d(TAG, "Normal event info: $event ")
 //            Log.d(TAG, "Node with start: ${rootInActiveWindow.findAccessibilityNodeInfosByText("Start")}")
 //            printInActiveWindow(rootInActiveWindow)
-            rootInActiveWindow.findAccessibilityNodeInfosByViewId("android:id/button1").first().performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            performGlobalAction(GLOBAL_ACTION_HOME)
+            rootInActiveWindow.findAccessibilityNodeInfosByViewId("android:id/button1")
+                .firstOrNull()?.let {
+                    if(event.className?.equals("com.android.systemui.media.MediaProjectionPermissionActivity") == true){
+                        it.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        performGlobalAction(GLOBAL_ACTION_HOME)
+                    }
+            }
         }
     }
-    
-    fun printInActiveWindow(node: AccessibilityNodeInfo){
+
+    fun printInActiveWindow(node: AccessibilityNodeInfo) {
         val count = node.childCount
-        if(count == 0 ) return
+        if (count == 0) return
         val indent = " "
         Log.d(TAG, "Node info in current window ----> ")
-        for( i in 0 until count){
-            val child = node.getChild(i)
-            Log.d(TAG, " ${indent.repeat(i)}: ${child.className} ${child.text} ${child.contentDescription} ${child.isClickable} ${child.viewIdResourceName}")
-            if(child.childCount > 0){
+        for (i in 0 until count) {
+            val child = node.getChild(i) ?: continue
+            Log.d(
+                TAG,
+                " ${indent.repeat(i)}: ${child.className} ${child.text} ${child.contentDescription} ${child.isClickable} ${child.viewIdResourceName}"
+            )
+            if (child.childCount > 0) {
                 printInActiveWindow(child)
             }
         }
@@ -107,17 +114,63 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
         serviceScope.launch {
             WebRtcSessionManagerImpl.keyEventFlow.collectLatest {
                 Log.d(TAG, "onServiceConnected: key event is $it")
-                when(it.first){
+                when (it.first) {
                     GestureType.TAP -> {
-                        TouchGestureHelper.tap(context, it.second.x, it.second.y,)
+                        TouchGestureHelper.tap(context, it.second.x, it.second.y)
                     }
-                    GestureType.DOUBLE_TAP -> TouchGestureHelper.doubleTap(context, it.second.x, it.second.y)
-                    GestureType.LONG_PRESS -> TouchGestureHelper.longPress(context, it.second.x, it.second.y)
-                    GestureType.PINCH -> TouchGestureHelper.pinch(context, it.second.x, it.second.y, it.third?.x ?: 0f, it.third?.y ?: 0f)
-                    GestureType.SWIPE_UP -> TouchGestureHelper.swipe(context,it.second.x,it.second.y,it.third?.x ?: it.second.x,it.third?.y ?: 0f)
-                    GestureType.SWIPE_DOWN -> TouchGestureHelper.swipe(context, it.second.x, it.second.y, it.third?.x ?: it.second.x, it.third?.y ?: 500f)
-                    GestureType.SWIPE_LEFT -> TouchGestureHelper.swipe(context, it.second.x, it.second.y, it.third?.x ?: 0f, it.third?.y ?: it.second.y)
-                    GestureType.SWIPE_RIGHT -> TouchGestureHelper.swipe(context,it.second.x, it.second.y, it.third?.x ?: 500f, it.third?.y ?: it.second.y)
+
+                    GestureType.DOUBLE_TAP -> TouchGestureHelper.doubleTap(
+                        context,
+                        it.second.x,
+                        it.second.y
+                    )
+
+                    GestureType.LONG_PRESS -> TouchGestureHelper.longPress(
+                        context,
+                        it.second.x,
+                        it.second.y
+                    )
+
+                    GestureType.PINCH -> TouchGestureHelper.pinch(
+                        context,
+                        it.second.x,
+                        it.second.y,
+                        it.third?.x ?: 0f,
+                        it.third?.y ?: 0f
+                    )
+
+                    GestureType.SWIPE_UP -> TouchGestureHelper.swipe(
+                        context,
+                        it.second.x,
+                        it.second.y,
+                        it.third?.x ?: it.second.x,
+                        it.third?.y ?: 0f
+                    )
+
+                    GestureType.SWIPE_DOWN -> TouchGestureHelper.swipe(
+                        context,
+                        it.second.x,
+                        it.second.y,
+                        it.third?.x ?: it.second.x,
+                        it.third?.y ?: 500f
+                    )
+
+                    GestureType.SWIPE_LEFT -> TouchGestureHelper.swipe(
+                        context,
+                        it.second.x,
+                        it.second.y,
+                        it.third?.x ?: 0f,
+                        it.third?.y ?: it.second.y
+                    )
+
+                    GestureType.SWIPE_RIGHT -> TouchGestureHelper.swipe(
+                        context,
+                        it.second.x,
+                        it.second.y,
+                        it.third?.x ?: 500f,
+                        it.third?.y ?: it.second.y
+                    )
+
                     else -> {
                         Log.d(TAG, "onServiceConnected: Unknown gesture type")
                     }
@@ -127,16 +180,19 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
 
         serviceScope.launch {
             WebRtcSessionManagerImpl.callActionFlow.collectLatest {
-                when(it){
+                when (it) {
                     CallAction.Home -> {
                         performGlobalAction(GLOBAL_ACTION_HOME)
                     }
+
                     CallAction.GoBack -> {
                         performGlobalAction(GLOBAL_ACTION_BACK)
                     }
+
                     CallAction.GoToRecent -> {
                         performGlobalAction(GLOBAL_ACTION_RECENTS)
                     }
+
                     CallAction.UnlockDevice -> {
                         unlockDevice()
                     }
@@ -149,7 +205,7 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
         }
         serviceScope.launch {
             signalingClient.signalingCommandFlow.collectLatest {
-                if(it.first == SignalingCommand.OFFER){
+                if (it.first == SignalingCommand.OFFER) {
                     Log.d(TAG, "startObservers: offer received at ${OffsetDateTime.now()}")
                     startActivity(Intent(context, VideoScreenActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK

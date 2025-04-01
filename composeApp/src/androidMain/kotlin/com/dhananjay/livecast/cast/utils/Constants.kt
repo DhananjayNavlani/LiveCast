@@ -13,6 +13,7 @@ object Constants {
     const val GROUP_KEY_APP = "app_updates_group"
     const val ACTION_START_SCREEN_SHARING = "action_start_screen_sharing"
     const val ACTION_STOP_SCREEN_SHARING = "action_stop_screen_sharing"
+    const val ACTION_STOP_ACCESSILIBITY_SERVICE = "action_stop_accessibility_service"
     const val EXTRA_ON_CAPTURE_SUCCESS = "on_capture_success"
     const val EXTRA_IS_VIEWER = "is_viewer"
 

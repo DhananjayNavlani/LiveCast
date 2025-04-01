@@ -1,10 +1,8 @@
 package com.dhananjay.livecast
 
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,7 +33,7 @@ class MainActivity : ComponentActivity() {
         if (it.resultCode == RESULT_OK) {
             Log.d(TAG, "The login response is : ${it.idpResponse}")
             if(!authRepository.isLoggedIn()){
-                Toast.makeText(this, "Login failed Try again~", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Login failed Try again", Toast.LENGTH_SHORT).show()
                 return@registerForActivityResult
             }
             val user = authRepository.getCurrentUser()!!
@@ -65,6 +63,11 @@ class MainActivity : ComponentActivity() {
                         controller = controller,
                         onSignIn = { intent, isViewer ->
                             this.isViewer = isViewer
+                            if(isViewer){
+                                startService(Intent(this@MainActivity, AccessibilityService::class.java).apply {
+                                    action = Constants.ACTION_STOP_ACCESSILIBITY_SERVICE
+                                })
+                            }
                             signInLauncher.launch(intent)
                         }
                         ,

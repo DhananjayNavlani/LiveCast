@@ -9,6 +9,10 @@ open class AccessibilityService: LiveCastService() {
         when(intent?.action) {
             Constants.ACTION_SEND_EVENT ->{
             }
+
+            Constants.ACTION_STOP_ACCESSILIBITY_SERVICE -> {
+                disableSelf()
+            }
         }
         return START_REDELIVER_INTENT
     }
