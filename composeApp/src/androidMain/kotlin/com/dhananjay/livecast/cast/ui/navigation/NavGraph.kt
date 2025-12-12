@@ -1,3 +1,4 @@
+
 package com.dhananjay.livecast.cast.ui.navigation
 
 import android.content.Intent
@@ -13,19 +14,24 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.dhananjay.livecast.cast.data.RemoteDataSource
-import com.dhananjay.livecast.cast.ui.login.LoginScreen
 import com.dhananjay.livecast.cast.ui.stage.StageScreen
 import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
 import com.dhananjay.livecast.cast.utils.Constants
-import com.dhananjay.livecast.webrtc.connection.SignalingClient
+import com.dhananjay.livecast.ui.navigation.Routes
+import com.dhananjay.livecast.ui.screens.LoginScreen
+import com.dhananjay.livecast.ui.screens.UserRole
 import com.firebase.ui.auth.AuthUI
 import org.koin.compose.koinInject
 import kotlin.random.Random
 
+/**
+ * Android-specific navigation graph that uses the shared Routes and LoginScreen
+ * from commonMain while providing Android-specific functionality like Firebase Auth.
+ */
 @Composable
 fun LiveCastNavigation(
     controller: NavHostController,
-    onSignIn: (Intent,Boolean) -> Unit,
+    onSignIn: (Intent, Boolean) -> Unit,
     loginStatus: Boolean,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
@@ -33,7 +39,7 @@ fun LiveCastNavigation(
     val context = LocalContext.current
     NavHost(
         navController = controller,
-        startDestination = if(loginStatus)Routes.StageScreen else Routes.LoginScreen,
+        startDestination = if (loginStatus) Routes.StageScreen else Routes.LoginScreen,
         modifier = modifier
     ) {
         composable<Routes.StageScreen> {
@@ -53,7 +59,8 @@ fun LiveCastNavigation(
                                 VideoScreenActivity::class.java
                             ).apply {
                                 putExtra(Constants.EXTRA_IS_VIEWER, true)
-                            })
+                            }
+                        )
                     },
                     onLogout = {
                         onLogout()
@@ -67,29 +74,35 @@ fun LiveCastNavigation(
             }
         }
         composable<Routes.LoginScreen> {
-            LoginScreen(isViewer = {
-                val intent = AuthUI.getInstance()
-                    .createSignInIntentBuilder()
-                    .setAvailableProviders(
-                        listOf(
-                            AuthUI.IdpConfig.GoogleBuilder().build(),
-                            AuthUI.IdpConfig.EmailBuilder().build(),
-                            AuthUI.IdpConfig.GitHubBuilder()
-                                .setCustomParameters(mapOf(
-                                    ))
-                                .build(),
-                            AuthUI.IdpConfig.TwitterBuilder()
-                                .setCustomParameters(
-                                    mapOf(
-                                    )
-                                )
-                                .build()
+            // Use the shared LoginScreen from commonMain
+            LoginScreen(
+                onRoleSelected = { role ->
+                    // Convert UserRole to isViewer boolean for the existing sign-in flow
+                    val isViewer = when (role) {
+                        is UserRole.Subscriber -> true
+                        is UserRole.Broadcaster -> false
+                    }
+                    
+                    // Create Firebase Auth intent
+                    val intent = AuthUI.getInstance()
+                        .createSignInIntentBuilder()
+                        .setAvailableProviders(
+                            listOf(
+                                AuthUI.IdpConfig.GoogleBuilder().build(),
+                                AuthUI.IdpConfig.EmailBuilder().build(),
+                                AuthUI.IdpConfig.GitHubBuilder()
+                                    .setCustomParameters(mapOf())
+                                    .build(),
+                                AuthUI.IdpConfig.TwitterBuilder()
+                                    .setCustomParameters(mapOf())
+                                    .build()
+                            )
                         )
-                    )
-                    .build()
-                onSignIn(intent, it)
-            },)
+                        .build()
+                    onSignIn(intent, isViewer)
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }
-

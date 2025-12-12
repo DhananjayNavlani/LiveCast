@@ -2,6 +2,8 @@ package com.dhananjay.livecast.di
 
 import androidx.work.WorkManager
 import com.dhananjay.livecast.MainViewModel
+import com.dhananjay.livecast.analytics.Analytics
+import com.dhananjay.livecast.analytics.createAnalytics
 import com.dhananjay.livecast.cast.data.PermissionManager
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.data.repositories.AuthRepository
@@ -28,6 +30,7 @@ val appModule = module {
     single { FirebaseFirestore.getInstance() }
     single <FirebaseCrashlytics>{ FirebaseCrashlytics.getInstance() }
     single { FirebaseAnalytics.getInstance(get()) }
+    single<Analytics> { createAnalytics() }
     single { FirebaseAuth.getInstance() }
     single { AuthUI.getInstance() }
     singleOf(::SignalingClient)

@@ -95,6 +95,7 @@ kotlin {
             implementation(libs.navigation.compose)
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
+            implementation(libs.kotlinx.serialization.json)
 
             implementation(libs.coil.compose)
 
@@ -137,6 +138,9 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    lint {
+        disable += "NullSafeMutableLiveData"
     }
 }
 
