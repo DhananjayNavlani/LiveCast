@@ -3,6 +3,7 @@ package com.dhananjay.livecast.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -40,12 +41,14 @@ sealed class UserRole {
  * - On iOS, Desktop, Web: Shows only "Sign In As Subscriber" option
  * 
  * @param onRoleSelected Callback when user selects a role. Will always be Subscriber for non-Android platforms.
+ * @param onBackToLanding Optional callback for navigating back to landing page (used on web)
  * @param modifier Modifier for the screen
  */
 @Composable
 fun LoginScreen(
     onRoleSelected: (UserRole) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBackToLanding: (() -> Unit)? = null
 ) {
     val platformCapabilities = getPlatformCapabilities()
     
@@ -56,6 +59,21 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Back button for web platform
+        if (onBackToLanding != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start
+            ) {
+                LiveCastButton(
+                    text = "← Back to Home",
+                    onClick = onBackToLanding,
+                    variant = LiveCastButtonVariant.Text
+                )
+            }
+            VerticalSpacer(32)
+        }
+        
         // Welcome text
         Text(
             text = "Welcome to LiveCast",
@@ -104,5 +122,17 @@ fun LoginScreen(
             color = LiveCastTheme.colors.textDisabled,
             textAlign = TextAlign.Center
         )
+        
+        // Additional info for web users
+        if (!platformCapabilities.canBroadcast) {
+            VerticalSpacer(16)
+            Text(
+                text = "📺 As a subscriber, you can watch and control broadcasts from Android devices",
+                style = LiveCastTheme.typography.body2,
+                color = LiveCastTheme.colors.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
     }
 }

@@ -36,7 +36,6 @@ kotlin {
     
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        moduleName = "composeApp"
         browser {
             val rootDirPath = project.rootDir.path
             val projectDirPath = project.projectDir.path
@@ -66,6 +65,7 @@ kotlin {
             implementation(libs.stream.log.android)
             implementation(libs.androidx.lifecycle.process)
             implementation(libs.androidx.lifecycle.runtime)
+            implementation(libs.androidx.lifecycle.runtime.compose.android)
 
 
             implementation(libs.androidx.datastore.preferences)
@@ -94,19 +94,24 @@ kotlin {
             implementation(compose.components.uiToolingPreview)
             implementation(libs.navigation.compose)
             implementation(libs.androidx.lifecycle.viewmodel)
-            implementation(libs.androidx.lifecycle.runtime.compose)
             implementation(libs.kotlinx.serialization.json)
 
             implementation(libs.coil.compose)
 
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
 
 
         }
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
+        }
+
+        iosMain.dependencies {
+            implementation(libs.androidx.lifecycle.runtime.compose)
         }
     }
 }

@@ -1,8 +1,8 @@
 package com.dhananjay.livecast.cast.ui.video
 
+import android.app.Activity
 import android.util.Log
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
+import androidx.compose.ui.platform.LocalContext
 import com.dhananjay.livecast.cast.ui.components.VideoRenderer
 import com.dhananjay.livecast.webrtc.session.LocalWebRtcSessionManager
 import kotlinx.coroutines.flow.first
@@ -213,7 +214,7 @@ fun ScreenCastScreen(
             )
         }
 
-        val activity = LocalActivity.current
+        val activity = LocalContext.current as? Activity
 
         VideoCallControls(
             modifier = Modifier

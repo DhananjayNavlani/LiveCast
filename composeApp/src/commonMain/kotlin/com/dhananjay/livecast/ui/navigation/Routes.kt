@@ -9,6 +9,12 @@ import kotlinx.serialization.Serializable
  */
 sealed class Routes {
     @Serializable
+    data object LandingScreen : Routes()
+    
+    @Serializable
+    data object FeaturesScreen : Routes()
+    
+    @Serializable
     data object LoginScreen : Routes()
     
     @Serializable

@@ -1,12 +1,47 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiveCast</title>
+    <meta name="description" content="LiveCast - Real-Time Screen Sharing & Remote Control. Stream your Android device screen to any browser with WebRTC.">
+    <meta name="keywords" content="screen sharing, remote control, WebRTC, Android, live streaming">
+    <meta name="author" content="LiveCast">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="LiveCast - Real-Time Screen Sharing">
+    <meta property="og:description" content="Stream your Android device screen to any browser with ultra-low latency WebRTC technology.">
+    <meta property="og:type" content="website">
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#000000">
+    
+    <title>LiveCast - Real-Time Screen Sharing & Remote Control</title>
+    
     <link type="text/css" rel="stylesheet" href="styles.css">
-    <script type="application/javascript" src="composeApp.js"></script>
+    
+    <!-- Favicon (can be added later) -->
+    <!-- <link rel="icon" type="image/png" href="favicon.png"> -->
 </head>
 <body>
+    <!-- Loading Screen - will be hidden when app is ready -->
+    <div class="loading-container" id="loading">
+        <div class="loading-logo"></div>
+        <div class="loading-text">LiveCast</div>
+        <div class="loading-subtitle">Loading application...</div>
+        <div class="loading-spinner"></div>
+    </div>
+    
+    <!-- Compose App will be rendered here -->
+    <script type="application/javascript">
+        // Hide loading screen when app is ready
+        window.addEventListener('load', function() {
+            // Give a small delay for Compose to initialize
+            setTimeout(function() {
+                document.body.classList.add('app-ready');
+            }, 500);
+        });
+    </script>
+    <script type="application/javascript" src="composeApp.js"></script>
 </body>
 </html>
