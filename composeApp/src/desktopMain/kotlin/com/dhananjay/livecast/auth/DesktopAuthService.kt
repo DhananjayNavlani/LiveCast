@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.HttpURLConnection
@@ -99,13 +100,10 @@ class DesktopAuthService : AuthService {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
 
-                val requestBody = """
-                    {
-                        "email": "$email",
-                        "password": "$password",
-                        "returnSecureToken": true
-                    }
-                """.trimIndent()
+                @Serializable
+                data class SignInRequest(val email: String, val password: String, val returnSecureToken: Boolean = true)
+                
+                val requestBody = json.encodeToString(SignInRequest.serializer(), SignInRequest(email, password))
 
                 connection.outputStream.use { it.write(requestBody.toByteArray()) }
 
@@ -160,13 +158,10 @@ class DesktopAuthService : AuthService {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
 
-                val requestBody = """
-                    {
-                        "email": "$email",
-                        "password": "$password",
-                        "returnSecureToken": true
-                    }
-                """.trimIndent()
+                @Serializable
+                data class SignUpRequest(val email: String, val password: String, val returnSecureToken: Boolean = true)
+                
+                val requestBody = json.encodeToString(SignUpRequest.serializer(), SignUpRequest(email, password))
 
                 connection.outputStream.use { it.write(requestBody.toByteArray()) }
 
@@ -283,12 +278,13 @@ class DesktopAuthService : AuthService {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
 
-                val requestBody = """
-                    {
-                        "requestType": "PASSWORD_RESET",
-                        "email": "$email"
-                    }
-                """.trimIndent()
+                @Serializable
+                data class PasswordResetRequest(val requestType: String, val email: String)
+                
+                val requestBody = json.encodeToString(
+                    PasswordResetRequest.serializer(), 
+                    PasswordResetRequest("PASSWORD_RESET", email)
+                )
 
                 connection.outputStream.use { it.write(requestBody.toByteArray()) }
 
@@ -300,6 +296,9 @@ class DesktopAuthService : AuthService {
                 }
 
                 if (responseCode == 200) {
+                    // Password reset email sent successfully
+                    // Note: Returns a minimal User object for API consistency - the empty ID indicates
+                    // this is not an authenticated user but rather a confirmation of the email operation
                     AuthResult.Success(User(id = "", email = email, displayName = null))
                 } else {
                     val errorMessage = try {

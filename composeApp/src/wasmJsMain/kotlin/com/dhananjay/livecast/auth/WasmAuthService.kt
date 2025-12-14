@@ -193,6 +193,8 @@ class WasmAuthService : AuthService {
         return try {
             val promise = FirebaseAuth.sendPasswordResetEmail(firebaseAuth, email) as Promise<Unit>
             promise.await()
+            // Note: Returns a minimal User object for API consistency - the empty ID indicates
+            // this is not an authenticated user but rather a confirmation of the email operation
             AuthResult.Success(User(id = "", email = email, displayName = null))
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Failed to send password reset email", e)
