@@ -4,6 +4,11 @@
   "outputDirectory": "composeApp/build/dist/wasmJs/productionExecutable",
   "installCommand": "echo 'Skipping npm install'",
   "framework": null,
+  "build": {
+    "env": {
+      "JAVA_VERSION": "17"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
@@ -26,3 +31,4 @@
     }
   ]
 }
+
