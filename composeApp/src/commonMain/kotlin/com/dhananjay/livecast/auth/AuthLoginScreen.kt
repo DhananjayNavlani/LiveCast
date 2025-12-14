@@ -232,18 +232,19 @@ fun AuthLoginScreen(
 
                     uiState.errorMessage?.let { error ->
                         VerticalSpacer(8)
+                        val isSuccessMessage = error.contains("sent", ignoreCase = true)
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = if (error.contains("sent", ignoreCase = true)) 
-                                Color(0xFF4CAF50).copy(alpha = 0.1f)
+                            backgroundColor = if (isSuccessMessage) 
+                                LiveCastTheme.colors.success.copy(alpha = 0.1f)
                             else 
                                 LiveCastTheme.colors.error.copy(alpha = 0.1f),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
                                 text = error,
-                                color = if (error.contains("sent", ignoreCase = true))
-                                    Color(0xFF4CAF50)
+                                color = if (isSuccessMessage)
+                                    LiveCastTheme.colors.success
                                 else
                                     LiveCastTheme.colors.error,
                                 style = LiveCastTheme.typography.body2,
