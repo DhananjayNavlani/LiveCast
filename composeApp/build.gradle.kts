@@ -174,6 +174,17 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.dhananjay.livecast"
             packageVersion = "1.0.0"
+            
+            // Application icon configuration
+            macOS {
+                iconFile.set(project.file("src/desktopMain/resources/icon-512.png"))
+            }
+            windows {
+                iconFile.set(project.file("src/desktopMain/resources/icon.ico"))
+            }
+            linux {
+                iconFile.set(project.file("src/desktopMain/resources/icon-512.png"))
+            }
         }
     }
 }
