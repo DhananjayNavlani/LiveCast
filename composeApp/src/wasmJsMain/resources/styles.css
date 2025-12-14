@@ -169,10 +169,6 @@ body.app-ready .loading-container {
         height: 60px;
     }
     
-    .loading-logo::before {
-        font-size: 24px;
-    }
-    
     .loading-text {
         font-size: 20px;
     }
