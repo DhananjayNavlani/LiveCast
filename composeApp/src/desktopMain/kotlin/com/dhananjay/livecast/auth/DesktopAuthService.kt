@@ -216,11 +216,10 @@ class DesktopAuthService : AuthService {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
 
-                val requestBody = """
-                    {
-                        "returnSecureToken": true
-                    }
-                """.trimIndent()
+                @Serializable
+                data class AnonymousSignInRequest(val returnSecureToken: Boolean = true)
+                
+                val requestBody = json.encodeToString(AnonymousSignInRequest.serializer(), AnonymousSignInRequest())
 
                 connection.outputStream.use { it.write(requestBody.toByteArray()) }
 
