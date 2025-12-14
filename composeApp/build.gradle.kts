@@ -13,6 +13,7 @@ plugins {
     alias(libs.plugins.crashlytics)
     alias(libs.plugins.lumo)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.swiftklib)
 }
 
 kotlin {
@@ -159,6 +160,14 @@ compose.desktop {
             packageName = "com.dhananjay.livecast"
             packageVersion = "1.0.0"
         }
+    }
+}
+
+swiftklib {
+    create("FirebaseAuthIOS") {
+        path = file("src/nativeInterop/swiftklib/FirebaseAuthIOS")
+        packageName = "com.dhananjay.livecast.auth.ios"
+        minIos = 15
     }
 }
 

@@ -1,84 +1,128 @@
 
 package com.dhananjay.livecast.auth
 
-import kotlinx.coroutines.delay
+import com.dhananjay.livecast.auth.ios.FirebaseAuthBridge
+import com.dhananjay.livecast.auth.ios.FirebaseUserData
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import platform.Foundation.NSUUID
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
- * iOS implementation of AuthService.
- * Uses local in-memory storage for now.
- * Note: Firebase iOS SDK integration requires CocoaPods/SPM setup in iosApp.
- * This provides a working implementation until Firebase is properly configured.
+ * iOS implementation of AuthService using Firebase iOS SDK.
+ * Uses swiftklib to call Firebase Auth natively through Swift.
  */
 class IosAuthService : AuthService {
+
+    private val firebaseAuthBridge = FirebaseAuthBridge.shared
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    override val currentUser: User?
-        get() = (_authState.value as? AuthState.Authenticated)?.user
+    init {
+        // Configure Firebase (should already be configured in App Delegate, but ensure it's done)
+        firebaseAuthBridge.configure()
 
-    override fun isLoggedIn(): Boolean = currentUser != null
+        // Set initial state based on current user
+        updateAuthStateFromCurrentUser()
+
+        // Listen for auth state changes
+        firebaseAuthBridge.addAuthStateListener { userData ->
+            if (userData != null) {
+                _authState.value = AuthState.Authenticated(userData.toUser())
+            } else {
+                _authState.value = AuthState.Unauthenticated
+            }
+        }
+    }
+
+    private fun updateAuthStateFromCurrentUser() {
+        val currentUser = firebaseAuthBridge.getCurrentUser()
+        _authState.value = if (currentUser != null) {
+            AuthState.Authenticated(currentUser.toUser())
+        } else {
+            AuthState.Unauthenticated
+        }
+    }
+
+    override val currentUser: User?
+        get() = firebaseAuthBridge.getCurrentUser()?.toUser()
+
+    override fun isLoggedIn(): Boolean = firebaseAuthBridge.isSignedIn()
 
     override suspend fun signInWithEmailAndPassword(email: String, password: String): AuthResult {
         _authState.value = AuthState.Loading
-        delay(500)
-
-        if (!email.contains("@")) {
-            val error = "Invalid email format"
-            _authState.value = AuthState.Error(error)
-            return AuthResult.Error(error)
+        
+        return suspendCancellableCoroutine { continuation ->
+            firebaseAuthBridge.signInWithEmail(email, password = password) { result ->
+                val authResult = handleAuthResult(result)
+                continuation.resume(authResult)
+            }
         }
-
-        if (password.length < 6) {
-            val error = "Password must be at least 6 characters"
-            _authState.value = AuthState.Error(error)
-            return AuthResult.Error(error)
-        }
-
-        val user = User(
-            id = generateUserId(email),
-            email = email,
-            displayName = email.substringBefore("@"),
-            isAnonymous = false
-        )
-
-        _authState.value = AuthState.Authenticated(user)
-        return AuthResult.Success(user)
     }
 
     override suspend fun createUserWithEmailAndPassword(email: String, password: String): AuthResult {
-        return signInWithEmailAndPassword(email, password)
+        _authState.value = AuthState.Loading
+        
+        return suspendCancellableCoroutine { continuation ->
+            firebaseAuthBridge.createUserWithEmail(email, password = password) { result ->
+                val authResult = handleAuthResult(result)
+                continuation.resume(authResult)
+            }
+        }
     }
 
     override suspend fun signInAnonymously(): AuthResult {
         _authState.value = AuthState.Loading
-        delay(300)
-
-        val user = User(
-            id = NSUUID().UUIDString,
-            email = null,
-            displayName = "Guest",
-            isAnonymous = true
-        )
-
-        _authState.value = AuthState.Authenticated(user)
-        return AuthResult.Success(user)
+        
+        return suspendCancellableCoroutine { continuation ->
+            firebaseAuthBridge.signInAnonymously { result ->
+                val authResult = handleAuthResult(result)
+                continuation.resume(authResult)
+            }
+        }
     }
 
     override suspend fun signOut() {
-        _authState.value = AuthState.Unauthenticated
+        val success = firebaseAuthBridge.signOut()
+        if (success) {
+            _authState.value = AuthState.Unauthenticated
+        }
     }
 
     override suspend fun sendPasswordResetEmail(email: String): AuthResult {
-        delay(300)
-        return AuthResult.Success(User(id = "", email = email, displayName = null))
+        return suspendCancellableCoroutine { continuation ->
+            firebaseAuthBridge.sendPasswordResetEmail(email) { result ->
+                if (result.success && result.user != null) {
+                    continuation.resume(AuthResult.Success(result.user!!.toUser()))
+                } else {
+                    val errorMessage = result.errorMessage ?: "Unknown error occurred"
+                    continuation.resume(AuthResult.Error(errorMessage, Exception(errorMessage)))
+                }
+            }
+        }
     }
 
-    private fun generateUserId(email: String): String {
-        return "ios_${email.hashCode()}_${NSUUID().UUIDString.take(8)}"
+    private fun handleAuthResult(result: com.dhananjay.livecast.auth.ios.FirebaseAuthResultData): AuthResult {
+        return if (result.success && result.user != null) {
+            val user = result.user!!.toUser()
+            _authState.value = AuthState.Authenticated(user)
+            AuthResult.Success(user)
+        } else {
+            val errorMessage = result.errorMessage ?: "Unknown error occurred"
+            _authState.value = AuthState.Error(errorMessage)
+            AuthResult.Error(errorMessage, Exception(errorMessage))
+        }
+    }
+
+    private fun FirebaseUserData.toUser(): User {
+        return User(
+            id = uid,
+            email = email,
+            displayName = displayName,
+            photoUrl = photoURL,
+            isAnonymous = isAnonymous
+        )
     }
 }
