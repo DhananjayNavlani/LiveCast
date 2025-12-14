@@ -1,21 +1,43 @@
+# LiveCast - Kotlin Multiplatform Project
+
 This is a Kotlin Multiplatform project targeting Android, iOS, Web, Desktop.
+
+## Project Structure
 
 * `/composeApp` is for code that will be shared across your Compose Multiplatform applications.
   It contains several subfolders:
-  - `commonMain` is for code that’s common for all targets.
+  - `commonMain` is for code that's common for all targets.
   - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
+    For example, if you want to use Apple's CoreCrypto for the iOS part of your Kotlin app,
     `iosMain` would be the right folder for such calls.
 
-* `/iosApp` contains iOS applications. Even if you’re sharing your UI with Compose Multiplatform, 
+* `/iosApp` contains iOS applications. Even if you're sharing your UI with Compose Multiplatform, 
   you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
 
+## Firebase Authentication
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html),
-[Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform/#compose-multiplatform),
-[Kotlin/Wasm](https://kotl.in/wasm/)…
+This project uses Firebase Authentication across all platforms:
+
+- **Android**: Uses Firebase Android SDK with Auth UI
+- **iOS**: Local authentication (Firebase iOS SDK integration pending)
+- **Desktop**: Uses Firebase Auth REST API - [Setup Guide](docs/FIREBASE_DESKTOP_WEB_SETUP.md)
+- **Web**: Uses Firebase JS SDK - [Setup Guide](docs/FIREBASE_DESKTOP_WEB_SETUP.md)
+
+See [Firebase Desktop/Web Setup Guide](docs/FIREBASE_DESKTOP_WEB_SETUP.md) for detailed configuration instructions.
+
+## Running the Project
+
+- **Android**: Open project in Android Studio
+- **iOS**: Open `iosApp` in Xcode
+- **Desktop**: `./gradlew :composeApp:run`
+- **Web**: `./gradlew :composeApp:wasmJsBrowserDevelopmentRun`
+
+## Learn More
+
+Learn more about:
+- [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)
+- [Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform/#compose-multiplatform)
+- [Kotlin/Wasm](https://kotl.in/wasm/)
 
 We would appreciate your feedback on Compose/Web and Kotlin/Wasm in the public Slack channel [#compose-web](https://slack-chats.kotlinlang.org/c/compose-web).
 If you face any issues, please report them on [GitHub](https://github.com/JetBrains/compose-multiplatform/issues).
-
-You can open the web application by running the `:composeApp:wasmJsBrowserDevelopmentRun` Gradle task.
