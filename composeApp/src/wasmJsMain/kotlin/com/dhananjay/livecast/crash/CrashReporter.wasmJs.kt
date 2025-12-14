@@ -1,4 +1,7 @@
+
 package com.dhananjay.livecast.crash
+
+import kotlin.js.JsName
 
 /**
  * Web (WasmJs) implementation that logs to browser console.
@@ -47,7 +50,4 @@ class WasmJsCrashReporter : CrashReporter {
     }
 }
 
-/**
- * Factory function to create the Web crash reporter implementation.
- */
 actual fun createCrashReporter(): CrashReporter = WasmJsCrashReporter()

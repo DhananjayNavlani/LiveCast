@@ -6,6 +6,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.dhananjay.livecast.auth.authModule
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.cast.utils.NotificationHelper
@@ -22,7 +23,7 @@ class LivecastApp : Application() {
     override fun onCreate() {
         super.onCreate()
         startKoin {
-            modules(appModule)
+            modules(appModule, authModule)
             androidContext(this@LivecastApp)
             androidLogger()
             workManagerFactory()

@@ -1,3 +1,4 @@
+
 package com.dhananjay.livecast.analytics
 
 /**
@@ -53,7 +54,11 @@ class WasmJsAnalytics : Analytics {
     }
 }
 
-/**
- * Factory function to create the Web analytics implementation.
- */
 actual fun createAnalytics(): Analytics = WasmJsAnalytics()
+
+/**
+ * External declaration for JavaScript console
+ */
+external object console {
+    fun log(message: String)
+}

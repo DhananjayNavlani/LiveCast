@@ -1,3 +1,4 @@
+
 package com.dhananjay.livecast
 
 import android.content.Intent
@@ -17,37 +18,44 @@ import androidx.navigation.compose.rememberNavController
 import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.data.repositories.AuthRepository
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
-import com.dhananjay.livecast.cast.ui.components.lumo.AppTheme
 import com.dhananjay.livecast.cast.ui.navigation.LiveCastNavigation
 import com.dhananjay.livecast.cast.utils.Constants
+import com.dhananjay.livecast.ui.theme.LiveCastTheme
 import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.KoinAndroidContext
 
+/**
+ * Main entry point for the Android app.
+ * Uses the shared LiveCastTheme and navigation with shared Routes and LoginScreen.
+ */
 class MainActivity : ComponentActivity() {
     private val viewModel by inject<MainViewModel>()
     private val authRepository: AuthRepository by inject()
     private var isViewer = false
     private val TAG = javaClass.simpleName
-    private val signInLauncher = registerForActivityResult(FirebaseAuthUIActivityResultContract()){
+    
+    private val signInLauncher = registerForActivityResult(FirebaseAuthUIActivityResultContract()) {
         if (it.resultCode == RESULT_OK) {
             Log.d(TAG, "The login response is : ${it.idpResponse}")
-            if(!authRepository.isLoggedIn()){
+            if (!authRepository.isLoggedIn()) {
                 Toast.makeText(this, "Login failed Try again", Toast.LENGTH_SHORT).show()
                 return@registerForActivityResult
             }
             val user = authRepository.getCurrentUser()!!
-            viewModel.addUser(LiveCastUser(
-                user.uid,
-                user.displayName ?: "User",
-                user.email,
-                user.phoneNumber,
-                user.photoUrl.toString(),
-                isViewer = isViewer,
-                widthPixels = resources.displayMetrics.widthPixels,
-                heightPixels = resources.displayMetrics.heightPixels,
-            ))
-        } else{
+            viewModel.addUser(
+                LiveCastUser(
+                    user.uid,
+                    user.displayName ?: "User",
+                    user.email,
+                    user.phoneNumber,
+                    user.photoUrl.toString(),
+                    isViewer = isViewer,
+                    widthPixels = resources.displayMetrics.widthPixels,
+                    heightPixels = resources.displayMetrics.heightPixels,
+                )
+            )
+        } else {
             Toast.makeText(this, "Something went wrong", Toast.LENGTH_SHORT).show()
         }
     }
@@ -55,7 +63,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AppTheme {
+            // Using shared LiveCastTheme from commonMain
+            LiveCastTheme {
                 KoinAndroidContext {
                     val controller = rememberNavController()
                     val loginStatus by viewModel.getLoginStatus().collectAsStateWithLifecycle(false)
@@ -63,29 +72,30 @@ class MainActivity : ComponentActivity() {
                         controller = controller,
                         onSignIn = { intent, isViewer ->
                             this.isViewer = isViewer
-                            if(isViewer){
-                                startService(Intent(this@MainActivity, AccessibilityService::class.java).apply {
-                                    action = Constants.ACTION_STOP_ACCESSILIBITY_SERVICE
-                                })
+                            if (isViewer) {
+                                startService(
+                                    Intent(
+                                        this@MainActivity,
+                                        AccessibilityService::class.java
+                                    ).apply {
+                                        action = Constants.ACTION_STOP_ACCESSILIBITY_SERVICE
+                                    }
+                                )
                             }
                             signInLauncher.launch(intent)
-                        }
-                        ,
+                        },
                         loginStatus,
                         onLogout = {
                             viewModel.logout()
                         },
                         modifier = Modifier
-                            .background(AppTheme.colors.primary)
+                            .background(LiveCastTheme.colors.primary)
                             .fillMaxSize()
                     )
                 }
             }
-
         }
     }
-
-
 }
 
 @Preview
