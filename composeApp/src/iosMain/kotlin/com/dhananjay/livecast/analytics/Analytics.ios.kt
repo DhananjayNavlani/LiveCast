@@ -1,14 +1,10 @@
 package com.dhananjay.livecast.analytics
 
+import platform.Foundation.NSLog
+
 /**
- * iOS implementation that logs to console.
- * Note: To use Firebase Analytics on iOS, you need to:
- * 1. Add Firebase SDK via CocoaPods or SPM in the iosApp
- * 2. Initialize Firebase in the iOS app's AppDelegate
- * 3. Use cocoapods {} block in build.gradle.kts to expose Analytics to Kotlin
- *
- * For now, this provides a console-based fallback implementation.
- * In a production app, you would integrate with Firebase iOS SDK.
+ * iOS implementation that logs to NSLog.
+ * In production, integrate with Firebase Analytics or other analytics services.
  */
 class IosAnalytics : Analytics {
     private val userProperties = mutableMapOf<String, String?>()
@@ -24,7 +20,7 @@ class IosAnalytics : Analytics {
                 append(" | Params: $params")
             }
         }
-        println(logMessage)
+        NSLog(logMessage)
     }
 
     override fun logScreenView(screenName: String, screenClass: String?) {
@@ -34,30 +30,33 @@ class IosAnalytics : Analytics {
             append("[Analytics] Screen View: $screenName")
             screenClass?.let { append(" | Class: $it") }
         }
-        println(logMessage)
+        NSLog(logMessage)
     }
 
     override fun setUserProperty(name: String, value: String?) {
         userProperties[name] = value
-        println("[Analytics] User Property Set: $name = $value")
+        NSLog("[Analytics] User Property Set: $name = $value")
     }
 
     override fun setUserId(userId: String?) {
         this.userId = userId
-        println("[Analytics] User ID Set: $userId")
+        NSLog("[Analytics] User ID Set: $userId")
     }
 
     override fun setAnalyticsCollectionEnabled(enabled: Boolean) {
         collectionEnabled = enabled
-        println("[Analytics] Collection Enabled: $enabled")
+        NSLog("[Analytics] Collection Enabled: $enabled")
     }
 
     override fun resetAnalyticsData() {
         userProperties.clear()
         userId = null
-        println("[Analytics] Data Reset")
+        NSLog("[Analytics] Data Reset")
     }
 }
 
+/**
+ * Factory function to create the iOS analytics implementation.
+ */
 actual fun createAnalytics(): Analytics = IosAnalytics()
 

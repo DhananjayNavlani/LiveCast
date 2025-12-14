@@ -1,70 +1,55 @@
 package com.dhananjay.livecast.analytics
 
 /**
- * Multiplatform analytics interface.
- * Uses Firebase Analytics on Android/iOS, and logs to console on Desktop/Web.
+ * Analytics interface for tracking events and user properties across platforms.
  */
 interface Analytics {
     /**
-     * Log an event with optional parameters
+     * Logs an analytics event with optional parameters.
+     *
+     * @param eventName The name of the event to log
+     * @param params Optional map of parameters associated with the event
      */
     fun logEvent(eventName: String, params: Map<String, Any>? = null)
 
     /**
-     * Log a screen view event
+     * Logs a screen view event.
+     *
+     * @param screenName The name of the screen being viewed
+     * @param screenClass Optional class name of the screen
      */
     fun logScreenView(screenName: String, screenClass: String? = null)
 
     /**
-     * Set a user property
+     * Sets a user property.
+     *
+     * @param name The name of the user property
+     * @param value The value of the user property
      */
     fun setUserProperty(name: String, value: String?)
 
     /**
-     * Set the user ID for analytics
+     * Sets the user ID.
+     *
+     * @param userId The user ID to set
      */
     fun setUserId(userId: String?)
 
     /**
-     * Enable or disable analytics collection
+     * Enables or disables analytics collection.
+     *
+     * @param enabled Whether analytics collection should be enabled
      */
     fun setAnalyticsCollectionEnabled(enabled: Boolean)
 
     /**
-     * Reset analytics data
+     * Resets all analytics data.
      */
     fun resetAnalyticsData()
 }
 
 /**
- * Common event names for consistent tracking across platforms
- */
-object AnalyticsEvents {
-    const val SCREEN_VIEW = "screen_view"
-    const val LOGIN = "login"
-    const val LOGOUT = "logout"
-    const val SIGN_UP = "sign_up"
-    const val SHARE = "share"
-    const val SELECT_CONTENT = "select_content"
-    const val BUTTON_CLICK = "button_click"
-    const val APP_OPEN = "app_open"
-    const val APP_BACKGROUND = "app_background"
-}
-
-/**
- * Common parameter names for consistent tracking across platforms
- */
-object AnalyticsParams {
-    const val SCREEN_NAME = "screen_name"
-    const val SCREEN_CLASS = "screen_class"
-    const val METHOD = "method"
-    const val CONTENT_TYPE = "content_type"
-    const val ITEM_ID = "item_id"
-    const val BUTTON_NAME = "button_name"
-}
-
-/**
- * Factory function to get platform-specific Analytics instance
+ * Factory function to create a platform-specific Analytics instance.
  */
 expect fun createAnalytics(): Analytics
 

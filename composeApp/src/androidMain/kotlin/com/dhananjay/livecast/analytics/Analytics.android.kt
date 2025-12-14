@@ -1,63 +1,66 @@
 package com.dhananjay.livecast.analytics
 
-import android.os.Bundle
-import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.analytics.ktx.analytics
-import com.google.firebase.ktx.Firebase
+import android.util.Log
 
 /**
- * Android implementation using Firebase Analytics
+ * Android implementation that logs to Logcat.
+ * In production, integrate with Firebase Analytics or other analytics services.
  */
 class AndroidAnalytics : Analytics {
-    private val firebaseAnalytics: FirebaseAnalytics by lazy {
-        Firebase.analytics
+    private val userProperties = mutableMapOf<String, String?>()
+    private var userId: String? = null
+    private var collectionEnabled = true
+
+    companion object {
+        private const val TAG = "Analytics"
     }
 
     override fun logEvent(eventName: String, params: Map<String, Any>?) {
-        val bundle = params?.toBundle()
-        firebaseAnalytics.logEvent(eventName, bundle)
+        if (!collectionEnabled) return
+
+        val logMessage = buildString {
+            append("Event: $eventName")
+            if (!params.isNullOrEmpty()) {
+                append(" | Params: $params")
+            }
+        }
+        Log.d(TAG, logMessage)
     }
 
     override fun logScreenView(screenName: String, screenClass: String?) {
-        val bundle = Bundle().apply {
-            putString(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
-            screenClass?.let { putString(FirebaseAnalytics.Param.SCREEN_CLASS, it) }
+        if (!collectionEnabled) return
+
+        val logMessage = buildString {
+            append("Screen View: $screenName")
+            screenClass?.let { append(" | Class: $it") }
         }
-        firebaseAnalytics.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW, bundle)
+        Log.d(TAG, logMessage)
     }
 
     override fun setUserProperty(name: String, value: String?) {
-        firebaseAnalytics.setUserProperty(name, value)
+        userProperties[name] = value
+        Log.d(TAG, "User Property Set: $name = $value")
     }
 
     override fun setUserId(userId: String?) {
-        firebaseAnalytics.setUserId(userId)
+        this.userId = userId
+        Log.d(TAG, "User ID Set: $userId")
     }
 
     override fun setAnalyticsCollectionEnabled(enabled: Boolean) {
-        firebaseAnalytics.setAnalyticsCollectionEnabled(enabled)
+        collectionEnabled = enabled
+        Log.d(TAG, "Collection Enabled: $enabled")
     }
 
     override fun resetAnalyticsData() {
-        firebaseAnalytics.resetAnalyticsData()
-    }
-
-    private fun Map<String, Any>.toBundle(): Bundle {
-        return Bundle().apply {
-            forEach { (key, value) ->
-                when (value) {
-                    is String -> putString(key, value)
-                    is Int -> putInt(key, value)
-                    is Long -> putLong(key, value)
-                    is Double -> putDouble(key, value)
-                    is Float -> putFloat(key, value)
-                    is Boolean -> putBoolean(key, value)
-                    else -> putString(key, value.toString())
-                }
-            }
-        }
+        userProperties.clear()
+        userId = null
+        Log.d(TAG, "Data Reset")
     }
 }
 
+/**
+ * Factory function to create the Android analytics implementation.
+ */
 actual fun createAnalytics(): Analytics = AndroidAnalytics()
 

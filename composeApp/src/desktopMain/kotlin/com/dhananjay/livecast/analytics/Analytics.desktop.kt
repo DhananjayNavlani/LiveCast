@@ -1,11 +1,9 @@
-
 package com.dhananjay.livecast.analytics
 
 /**
- * Web (WasmJS) implementation that logs to browser console.
- * In production, you could integrate with services like Google Analytics, Mixpanel, etc.
+ * Desktop (JVM) implementation that prints to console.
  */
-class WasmJsAnalytics : Analytics {
+class DesktopAnalytics : Analytics {
     private val userProperties = mutableMapOf<String, String?>()
     private var userId: String? = null
     private var collectionEnabled = true
@@ -54,4 +52,8 @@ class WasmJsAnalytics : Analytics {
     }
 }
 
-actual fun createAnalytics(): Analytics = WasmJsAnalytics()
+/**
+ * Factory function to create the Desktop analytics implementation.
+ */
+actual fun createAnalytics(): Analytics = DesktopAnalytics()
+

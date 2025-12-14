@@ -1,8 +1,8 @@
+@file:OptIn(org.jetbrains.kotlin.gradle.targets.js.dsl.ExperimentalWasmDsl::class)
 
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -38,17 +38,8 @@ kotlin {
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
         browser {
-            val rootDirPath = project.rootDir.path
-            val projectDirPath = project.projectDir.path
             commonWebpackConfig {
                 outputFileName = "composeApp.js"
-                devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
-                    static = (static ?: mutableListOf()).apply {
-                        // Serve sources to debug inside browser
-                        add(rootDirPath)
-                        add(projectDirPath)
-                    }
-                }
             }
         }
         binaries.executable()
@@ -56,9 +47,11 @@ kotlin {
     
     sourceSets {
         val desktopMain by getting
+        val wasmJsMain by getting
         
         androidMain.dependencies {
             implementation(compose.preview)
+            implementation(compose.components.resources)
             implementation(libs.androidx.material3.compose)
             implementation(libs.androidx.activity.compose)
             implementation(libs.kotlinx.serialization.json)
@@ -68,11 +61,9 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtime)
             implementation(libs.androidx.lifecycle.runtime.compose.android)
 
-
             implementation(libs.androidx.datastore.preferences)
             implementation(libs.androidx.datastore.preferences.core)
             implementation(libs.coil.network)
-
 
             //workmanager
             implementation(libs.androidx.work)
@@ -84,35 +75,59 @@ kotlin {
             implementation(libs.koin.android)
             implementation(libs.koin.androidx.compose)
             implementation(libs.koin.androidx.work)
-        }
-        commonMain.dependencies {
-
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material)
-            implementation(compose.ui)
-            implementation(compose.components.resources)
-            implementation(compose.components.uiToolingPreview)
+            
+            // Android-specific dependencies that don't work with wasmJs
             implementation(libs.navigation.compose)
             implementation(libs.androidx.lifecycle.viewmodel)
-            implementation(libs.kotlinx.serialization.json)
-
             implementation(libs.coil.compose)
-
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
-
-
         }
+        
+        commonMain.dependencies {
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material)
+            implementation(compose.ui)
+            implementation(compose.components.uiToolingPreview)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.androidx.lifecycle.viewmodel)
+            implementation(project.dependencies.platform(libs.koin.bom))
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
+        }
+        
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)
+            implementation(compose.components.resources)
             implementation(libs.kotlinx.coroutines.swing)
+            implementation(libs.navigation.compose)
+            implementation(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.coil.compose)
+            implementation(project.dependencies.platform(libs.koin.bom))
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
         }
 
         iosMain.dependencies {
+            implementation(compose.components.resources)
             implementation(libs.androidx.lifecycle.runtime.compose)
+            implementation(libs.navigation.compose)
+            implementation(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.coil.compose)
+            implementation(project.dependencies.platform(libs.koin.bom))
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
+        }
+
+        wasmJsMain.dependencies {
+            // Minimal dependencies for wasmJs - explicitly add stdlib
+            implementation(kotlin("stdlib"))
         }
     }
 }
