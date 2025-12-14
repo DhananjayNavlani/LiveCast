@@ -80,6 +80,7 @@ googleServices = { id = "com.google.gms.google-services", version.ref = "google-
 crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlytics" }
 lumo = {id = "com.nomanr.plugin.lumo", version.ref = "lumo"}
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+swiftklib = { id = "io.github.ttypic.swiftklib", version = "0.6.4" }
 
 [bundles]
 webrtc-android = ["webrtc-android-bom", "webrtc-android", "webrtc-android-ui", "webrtc-compose", "webrtc-ktx"]

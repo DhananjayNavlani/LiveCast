@@ -1,45 +1,25 @@
+
 package com.dhananjay.livecast.auth
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import platform.Foundation.NSUserDefaults
 import platform.Foundation.NSUUID
 
 /**
  * iOS implementation of AuthService.
- * Uses NSUserDefaults for persistence.
+ * Uses local in-memory storage for now.
+ * Note: Firebase iOS SDK integration requires CocoaPods/SPM setup in iosApp.
+ * This provides a working implementation until Firebase is properly configured.
  */
 class IosAuthService : AuthService {
 
-    private val userDefaults = NSUserDefaults.standardUserDefaults
-    private val USER_ID_KEY = "livecast_user_id"
-    private val USER_EMAIL_KEY = "livecast_user_email"
-    private val USER_NAME_KEY = "livecast_user_name"
-    private val IS_ANONYMOUS_KEY = "livecast_is_anonymous"
-
-    private val _authState = MutableStateFlow<AuthState>(loadInitialState())
+    private val _authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
     override val currentUser: User?
         get() = (_authState.value as? AuthState.Authenticated)?.user
-
-    private fun loadInitialState(): AuthState {
-        val userId = userDefaults.stringForKey(USER_ID_KEY)
-        return if (userId != null) {
-            AuthState.Authenticated(
-                User(
-                    id = userId,
-                    email = userDefaults.stringForKey(USER_EMAIL_KEY),
-                    displayName = userDefaults.stringForKey(USER_NAME_KEY),
-                    isAnonymous = userDefaults.boolForKey(IS_ANONYMOUS_KEY)
-                )
-            )
-        } else {
-            AuthState.Unauthenticated
-        }
-    }
 
     override fun isLoggedIn(): Boolean = currentUser != null
 
@@ -66,7 +46,6 @@ class IosAuthService : AuthService {
             isAnonymous = false
         )
 
-        saveUser(user)
         _authState.value = AuthState.Authenticated(user)
         return AuthResult.Success(user)
     }
@@ -86,13 +65,11 @@ class IosAuthService : AuthService {
             isAnonymous = true
         )
 
-        saveUser(user)
         _authState.value = AuthState.Authenticated(user)
         return AuthResult.Success(user)
     }
 
     override suspend fun signOut() {
-        clearUser()
         _authState.value = AuthState.Unauthenticated
     }
 
@@ -103,21 +80,5 @@ class IosAuthService : AuthService {
 
     private fun generateUserId(email: String): String {
         return "ios_${email.hashCode()}_${NSUUID().UUIDString.take(8)}"
-    }
-
-    private fun saveUser(user: User) {
-        userDefaults.setObject(user.id, USER_ID_KEY)
-        user.email?.let { userDefaults.setObject(it, USER_EMAIL_KEY) }
-        user.displayName?.let { userDefaults.setObject(it, USER_NAME_KEY) }
-        userDefaults.setBool(user.isAnonymous, IS_ANONYMOUS_KEY)
-        userDefaults.synchronize()
-    }
-
-    private fun clearUser() {
-        userDefaults.removeObjectForKey(USER_ID_KEY)
-        userDefaults.removeObjectForKey(USER_EMAIL_KEY)
-        userDefaults.removeObjectForKey(USER_NAME_KEY)
-        userDefaults.removeObjectForKey(IS_ANONYMOUS_KEY)
-        userDefaults.synchronize()
     }
 }
