@@ -1,7 +1,193 @@
+/* LiveCast Web App Styles */
+
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
 html, body {
     width: 100%;
     height: 100%;
     margin: 0;
     padding: 0;
     overflow: hidden;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: #ffffff;
+    color: #000000;
+}
+
+/* Canvas container for Compose */
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Loading state */
+.loading-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    z-index: 9999;
+}
+
+.loading-logo {
+    width: 80px;
+    height: 80px;
+    background-color: #000;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 24px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.loading-logo::before {
+    content: '▶';
+    font-size: 32px;
+    color: #fff;
+}
+
+.loading-text {
+    font-size: 24px;
+    font-weight: bold;
+    color: #000;
+    margin-bottom: 8px;
+}
+
+.loading-subtitle {
+    font-size: 14px;
+    color: #666;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e0e0e0;
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-top: 24px;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 20px rgba(0, 0, 0, 0);
+    }
+}
+
+/* Hide loading when app is ready */
+body.app-ready .loading-container {
+    display: none;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #000000;
+        color: #ffffff;
+    }
+    
+    .loading-container {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    }
+    
+    .loading-logo {
+        background-color: #fff;
+    }
+    
+    .loading-logo::before {
+        color: #000;
+    }
+    
+    .loading-text {
+        color: #fff;
+    }
+    
+    .loading-subtitle {
+        color: #aaa;
+    }
+    
+    .loading-spinner {
+        border-color: #333;
+        border-top-color: #fff;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #1a1a1a;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: #555;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #777;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .loading-logo {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .loading-logo::before {
+        font-size: 24px;
+    }
+    
+    .loading-text {
+        font-size: 20px;
+    }
+    
+    .loading-subtitle {
+        font-size: 12px;
+    }
 }
