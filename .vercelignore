@@ -1,0 +1,27 @@
+# Build outputs
+build/
+.gradle/
+composeApp/build/
+*/build/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# iOS
+iosApp/Pods/
+iosApp/*.xcworkspace
+iosApp/build/
+
+# Kotlin Native
+*.kexe
+*.klib
+
+# Local files
+local.properties
+.DS_Store
+
+# Keep gradle wrapper jar for builds
+!gradle/wrapper/gradle-wrapper.jar
+

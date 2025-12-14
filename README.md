@@ -19,3 +19,27 @@ We would appreciate your feedback on Compose/Web and Kotlin/Wasm in the public S
 If you face any issues, please report them on [GitHub](https://github.com/JetBrains/compose-multiplatform/issues).
 
 You can open the web application by running the `:composeApp:wasmJsBrowserDevelopmentRun` Gradle task.
+
+## Deployment
+
+### Vercel Deployment
+
+This project is configured to deploy the WasmJS build to Vercel. The configuration includes:
+
+- **Build Command**: Gradle task to build the WasmJS distribution
+- **Output Directory**: `composeApp/build/dist/wasmJs/productionExecutable`
+- **Caching**: Gradle dependencies and build cache are configured for faster builds
+
+#### Deployment Optimizations:
+
+1. **Gradle Caching**: The build uses Gradle's configuration and dependency caching
+2. **No Daemon Mode**: Builds run without Gradle daemon to reduce memory usage on Vercel
+3. **Parallel Execution**: Gradle tasks run in parallel where possible
+4. **Required Headers**: Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers are set for WasmJS
+
+To deploy:
+```bash
+vercel --prod
+```
+
+Note: First build may take longer as Gradle downloads dependencies. Subsequent builds will be faster due to caching.
