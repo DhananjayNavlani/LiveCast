@@ -1,14 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "./gradlew :composeApp:wasmJsBrowserDistribution",
+  "buildCommand": "curl -s \"https://get.sdkman.io\" | bash && source \"$HOME/.sdkman/bin/sdkman-init.sh\" && sdk install java 17.0.9-tem && sdk use java 17.0.9-tem && ./gradlew :composeApp:wasmJsBrowserDistribution",
   "outputDirectory": "composeApp/build/dist/wasmJs/productionExecutable",
   "installCommand": "echo 'Skipping npm install'",
   "framework": null,
-  "build": {
-    "env": {
-      "JAVA_VERSION": "17"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
