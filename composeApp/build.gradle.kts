@@ -1,7 +1,4 @@
-@file:OptIn(org.jetbrains.kotlin.gradle.targets.js.dsl.ExperimentalWasmDsl::class)
-
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -35,20 +32,9 @@ kotlin {
     
     jvm("desktop")
     
-    @OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
-        browser {
-            commonWebpackConfig {
-                outputFileName = "composeApp.js"
-            }
-        }
-        binaries.executable()
-    }
-    
     sourceSets {
         val desktopMain by getting
-        val wasmJsMain by getting
-        
+
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(compose.components.resources)
@@ -124,17 +110,21 @@ kotlin {
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
         }
-
-        wasmJsMain.dependencies {
-            // Minimal dependencies for wasmJs - explicitly add stdlib
-            implementation(kotlin("stdlib"))
-        }
     }
 }
 
 android {
     namespace = "com.dhananjay.livecast"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            if (this is com.android.build.gradle.internal.api.ApkVariantOutputImpl) {
+                val fileName = "livecast-${variant.versionName}.apk"
+                outputFileName = fileName
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.dhananjay.livecast"
@@ -142,6 +132,10 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
     packaging {
         resources {
