@@ -39,6 +39,7 @@ kotlin {
             implementation(compose.preview)
             implementation(compose.components.resources)
             implementation(libs.androidx.material3.compose)
+            implementation(libs.material.icons.extended)
             implementation(libs.androidx.activity.compose)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.bundles.webrtc.android)

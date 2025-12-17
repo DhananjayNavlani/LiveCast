@@ -16,6 +16,9 @@ export interface UserData {
   photoURL: string | null;
   createdAt: Date;
   lastLoginAt: Date;
+  is_online?: boolean;
+  last_seen?: Date;
+  is_viewer?: boolean;
 }
 
 interface AuthContextType {
@@ -49,6 +52,11 @@ async function saveUserToFirestore(user: User, isNewUser: boolean = false) {
   try {
     await setDoc(userRef, {
       ...userData,
+      name: user.displayName || user.email || 'Anonymous',
+      photo_url: user.photoURL,
+      is_online: true,
+      is_viewer: true,
+      last_seen: serverTimestamp(),
       lastLoginAt: serverTimestamp(),
       ...(isNewUser && { createdAt: serverTimestamp() }),
     }, { merge: true });
@@ -119,6 +127,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     setIsLoading(true);
     try {
+      // Set user offline before signing out
+      if (user) {
+        const userRef = doc(firestore, 'users', user.uid);
+        await setDoc(userRef, {
+          is_online: false,
+          last_seen: serverTimestamp(),
+        }, { merge: true });
+      }
       await firebaseSignOut(auth);
       setUserData(null);
     } finally {

@@ -83,7 +83,7 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
 
     private fun startObservers() {
         serviceScope.launch {
-            remoteDataSource.addDeviceOnline()
+            remoteDataSource.setUserOnline(serviceScope)
             remoteDataSource.getConfigCollectionFlow().distinctUntilChanged().collectLatest {
                 it.onSuccess { document ->
                     val config = document.toObject<DeviceConfig>() ?: return@onSuccess
@@ -241,7 +241,7 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
 
     override fun onUnbind(intent: Intent?): Boolean {
         serviceScope.launch {
-            remoteDataSource.removeDeviceOnline()
+            remoteDataSource.setUserOffline()
         }
         crashlytics.setCustomKey(
             "onUnbind",

@@ -39,7 +39,7 @@ val appModule = module {
         bind<WebRtcSessionManager>()
     }
     singleOf(::NotificationHelper)
-    singleOf(::RemoteDataSource)
+    single { RemoteDataSource(get(), get(), get(), get()) }
     singleOf(::AuthRepository)
     singleOf(::PreferencesRepository)
     singleOf(::PermissionManager)
