@@ -27,7 +27,6 @@ export class WebRTCClient {
   private callbacks: WebRTCCallbacks;
   private pendingIceCandidates: RTCIceCandidate[] = [];
   private remoteDescriptionSet = false;
-  private isViewer = false; // Whether this client is viewing (sent offer) or broadcasting
 
   constructor(signalingClient: SignalingClient, callbacks: WebRTCCallbacks) {
     this.signalingClient = signalingClient;
@@ -43,7 +42,6 @@ export class WebRTCClient {
 
   // Initiate viewing session (active mode - send offer to Android)
   async startViewing(userId: string) {
-    this.isViewer = true;
     this.callbacks.onConnectionStateChange('connecting');
 
     // Create peer connection
@@ -143,7 +141,6 @@ export class WebRTCClient {
   // Handle offer from Android viewer (web is broadcaster)
   private async handleOffer(sdp: string) {
     console.log('[WebRTC] Processing offer (broadcaster mode)');
-    this.isViewer = false;
     this.callbacks.onConnectionStateChange('connecting');
 
     // Create peer connection
