@@ -35,28 +35,38 @@ class MainActivity : ComponentActivity() {
     private var isViewer = false
     private val TAG = javaClass.simpleName
     
-    private val signInLauncher = registerForActivityResult(FirebaseAuthUIActivityResultContract()) {
-        if (it.resultCode == RESULT_OK) {
-            Log.d(TAG, "The login response is : ${it.idpResponse}")
-            if (!authRepository.isLoggedIn()) {
-                Toast.makeText(this, "Login failed Try again", Toast.LENGTH_SHORT).show()
-                return@registerForActivityResult
-            }
-            val user = authRepository.getCurrentUser()!!
-            viewModel.addUser(
-                LiveCastUser(
-                    user.uid,
-                    user.displayName ?: "User",
-                    user.email,
-                    user.phoneNumber,
-                    user.photoUrl.toString(),
-                    isViewer = isViewer,
-                    widthPixels = resources.displayMetrics.widthPixels,
-                    heightPixels = resources.displayMetrics.heightPixels,
+    private val signInLauncher = registerForActivityResult(FirebaseAuthUIActivityResultContract()) { result ->
+        when (result.resultCode) {
+            RESULT_OK -> {
+                Log.d(TAG, "Sign-in successful: ${result.idpResponse}")
+                if (!authRepository.isLoggedIn()) {
+                    Toast.makeText(this, "Login failed. Please try again.", Toast.LENGTH_SHORT).show()
+                    return@registerForActivityResult
+                }
+                val user = authRepository.getCurrentUser()!!
+                viewModel.addUser(
+                    LiveCastUser(
+                        user.uid,
+                        user.displayName ?: "User",
+                        user.email,
+                        user.phoneNumber,
+                        user.photoUrl.toString(),
+                        isViewer = isViewer,
+                        widthPixels = resources.displayMetrics.widthPixels,
+                        heightPixels = resources.displayMetrics.heightPixels,
+                    )
                 )
-            )
-        } else {
-            Toast.makeText(this, "Something went wrong", Toast.LENGTH_SHORT).show()
+            }
+            RESULT_CANCELED -> {
+                Log.d(TAG, "Sign-in cancelled by user")
+                Toast.makeText(this, "Sign-in cancelled", Toast.LENGTH_SHORT).show()
+            }
+            else -> {
+                val error = result.idpResponse?.error
+                val errorMessage = error?.message ?: "Sign-in failed"
+                Log.e(TAG, "Sign-in error: ${error?.errorCode} - $errorMessage", error)
+                Toast.makeText(this, "Sign-in failed: $errorMessage", Toast.LENGTH_LONG).show()
+            }
         }
     }
 

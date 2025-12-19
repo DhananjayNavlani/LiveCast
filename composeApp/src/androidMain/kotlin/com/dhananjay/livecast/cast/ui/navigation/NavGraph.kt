@@ -84,18 +84,15 @@ fun LiveCastNavigation(
                     }
                     
                     // Create Firebase Auth intent
+                    // Only include properly configured providers (Google, Email, Anonymous)
+                    // Remove GitHub and Twitter until they are configured in Firebase Console
                     val intent = AuthUI.getInstance()
                         .createSignInIntentBuilder()
                         .setAvailableProviders(
                             listOf(
                                 AuthUI.IdpConfig.GoogleBuilder().build(),
                                 AuthUI.IdpConfig.EmailBuilder().build(),
-                                AuthUI.IdpConfig.GitHubBuilder()
-                                    .setCustomParameters(mapOf())
-                                    .build(),
-                                AuthUI.IdpConfig.TwitterBuilder()
-                                    .setCustomParameters(mapOf())
-                                    .build()
+                                AuthUI.IdpConfig.AnonymousBuilder().build()
                             )
                         )
                         .build()

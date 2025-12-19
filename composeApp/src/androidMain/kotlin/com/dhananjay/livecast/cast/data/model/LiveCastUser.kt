@@ -12,7 +12,6 @@ import kotlinx.serialization.Transient
 @IgnoreExtraProperties
 data class LiveCastUser(
     // User identity
-    @DocumentId
     var uid: String = "",
     var name: String = "",
     var email: String? = null,
