@@ -2,14 +2,13 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Button from '../components/Button';
-import ThemeToggle from '../components/ThemeToggle';
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background">
       {/* Minimal Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
               <span className="text-white text-sm font-bold">▶</span>
@@ -17,7 +16,6 @@ export default function LandingPage() {
             <span className="font-bold text-lg text-text">LiveCast</span>
           </Link>
           <div className="flex items-center gap-4">
-            <ThemeToggle />
             <Link to="/login">
               <Button variant="primary" size="sm">Get Started</Button>
             </Link>
@@ -26,7 +24,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section - Minimal & Bold */}
-      <section className="relative min-h-screen flex items-center justify-center px-6 overflow-hidden">
+      <section className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 overflow-hidden">
         {/* Subtle background effects */}
         <div className="absolute inset-0 grid-pattern opacity-50" />
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
@@ -106,7 +104,7 @@ export default function LandingPage() {
       </section>
 
       {/* Minimal Features - Just 3 key points */}
-      <section className="py-32 px-6 relative">
+      <section className="py-24 sm:py-32 px-4 sm:px-6 lg:px-8 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background-light/30 to-background" />
         
         <div className="relative max-w-5xl mx-auto">
@@ -154,7 +152,7 @@ export default function LandingPage() {
       </section>
 
       {/* Minimal CTA */}
-      <section className="py-32 px-6 relative">
+      <section className="py-24 sm:py-32 px-4 sm:px-6 lg:px-8 relative">
         <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-secondary/10 to-primary/10" />
         
         <div className="relative max-w-3xl mx-auto text-center">
@@ -184,7 +182,7 @@ export default function LandingPage() {
       </section>
 
       {/* Minimal Footer */}
-      <footer className="py-8 px-6 border-t border-border">
+      <footer className="py-8 px-4 sm:px-6 lg:px-8 border-t border-border">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
