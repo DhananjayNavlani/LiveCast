@@ -59,8 +59,8 @@ kotlin {
             implementation(libs.bundles.firebase.android)
 
             // Google Sign-In with Credential Manager
-            implementation(libs.androidx.credentials)
-            implementation(libs.androidx.credentials.play.services.auth)
+            implementation(libs.credentials)
+            implementation(libs.credentials.play.services)
             implementation(libs.google.id)
 
             implementation(libs.koin.android)
