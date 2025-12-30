@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/Button';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function LoginPage() {
   const { signInWithGoogle, isLoading, error, clearError } = useAuth();
@@ -18,11 +19,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex bg-background transition-colors duration-300">
       {/* Left Panel - Login */}
       <div className="flex-1 flex items-center justify-center p-8 relative">
         <div className="absolute inset-0 grid-pattern" />
         <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+        
+        {/* Theme Toggle - Fixed Position */}
+        <div className="absolute top-6 right-6">
+          <ThemeToggle />
+        </div>
 
         <motion.div
           initial={{ opacity: 0, x: -20 }}

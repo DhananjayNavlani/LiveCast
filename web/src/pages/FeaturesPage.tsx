@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Button from '../components/Button';
+import ThemeToggle from '../components/ThemeToggle';
 
 interface FeatureDetailProps {
   emoji: string;
@@ -57,6 +58,10 @@ export default function FeaturesPage() {
             <Link to="/" className="text-text-secondary hover:text-text transition-colors">
               Home
             </Link>
+            <Link to="/download" className="text-text-secondary hover:text-text transition-colors">
+              Download
+            </Link>
+            <ThemeToggle />
             <Link to="/login">
               <Button variant="primary" size="sm">Get Started</Button>
             </Link>
