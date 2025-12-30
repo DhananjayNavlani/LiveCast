@@ -57,7 +57,12 @@ export default function DownloadPage() {
         ...asset,
         type: (APK_PATTERNS.debug.test(asset.name) ? 'debug' : 'release') as const
       }))
-      .sort((a) => (a.type === 'release' ? -1 : 1)); // Release first
+      .sort((a, b) => {
+        // Release first, then debug
+        if (a.type === 'release' && b.type !== 'release') return -1;
+        if (a.type !== 'release' && b.type === 'release') return 1;
+        return 0;
+      });
   };
 
   const apkAssets = getApkAssets();

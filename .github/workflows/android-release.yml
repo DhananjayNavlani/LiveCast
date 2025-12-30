@@ -38,14 +38,38 @@ jobs:
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          echo "$GOOGLE_SERVICES_JSON" | base64 -d > composeApp/src/google-services.json
+          # Check if secret is set
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "Error: GOOGLE_SERVICES_JSON secret is not set or empty"
+            exit 1
+          fi
+          
+          # Debug: Show length of secret (not the content)
+          echo "Secret length: ${#GOOGLE_SERVICES_JSON} characters"
+          
+          # Decode base64 to file
+          echo "$GOOGLE_SERVICES_JSON" | base64 -d > composeApp/src/google-services.json 2>/dev/null || {
+            echo "Error: Failed to decode base64. The secret may not be properly base64 encoded."
+            echo "Make sure you encoded the file with: base64 -w 0 google-services.json"
+            exit 1
+          }
+          
+          # Check if file was created and has content
+          if [ ! -s composeApp/src/google-services.json ]; then
+            echo "Error: google-services.json is empty after decoding"
+            exit 1
+          fi
+          
           # Validate JSON is properly formatted
           if ! python3 -c "import json; json.load(open('composeApp/src/google-services.json'))"; then
             echo "Error: google-services.json is not valid JSON"
-            cat composeApp/src/google-services.json
+            echo "File size: $(wc -c < composeApp/src/google-services.json) bytes"
+            echo "First 100 chars:"
+            head -c 100 composeApp/src/google-services.json
             exit 1
           fi
-          echo "google-services.json validated successfully"
+          
+          echo "✓ google-services.json validated successfully"
 
       - name: Decode and setup keystore
         env:
