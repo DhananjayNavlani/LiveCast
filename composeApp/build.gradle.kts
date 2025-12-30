@@ -131,8 +131,19 @@ android {
         applicationId = "com.dhananjay.livecast"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        
+        // Support dynamic version from CI/CD
+        val versionNameFromProperty = project.findProperty("version.name") as String?
+        versionCode = versionNameFromProperty?.let {
+            // Generate version code from version name (e.g., 1.0.1 -> 10001)
+            val parts = it.split(".")
+            if (parts.size >= 3) {
+                parts[0].toIntOrNull()?.times(10000)?.plus(
+                    parts[1].toIntOrNull()?.times(100) ?: 0
+                )?.plus(parts[2].toIntOrNull() ?: 0) ?: 1
+            } else 1
+        } ?: 1
+        versionName = versionNameFromProperty ?: "1.0.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -143,9 +154,40 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    // Signing configuration
+    signingConfigs {
+        create("release") {
+            // Support signing from CI/CD environment
+            val keystoreFile = project.findProperty("android.injected.signing.store.file") as String?
+            val keystorePassword = project.findProperty("android.injected.signing.store.password") as String?
+            val keyAlias = project.findProperty("android.injected.signing.key.alias") as String?
+            val keyPassword = project.findProperty("android.injected.signing.key.password") as String?
+            
+            if (keystoreFile != null && keystorePassword != null && keyAlias != null && keyPassword != null) {
+                storeFile = file(keystoreFile)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+    
     buildTypes {
+        getByName("debug") {
+            isMinifyEnabled = false
+            isDebuggable = true
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
+        
         getByName("release") {
             isMinifyEnabled = false
+            isDebuggable = false
+            
+            // Apply signing config if available
+            if (signingConfigs.findByName("release")?.storeFile?.exists() == true) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
