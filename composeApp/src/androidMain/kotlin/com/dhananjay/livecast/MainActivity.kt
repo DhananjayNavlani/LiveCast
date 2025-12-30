@@ -3,8 +3,6 @@ package com.dhananjay.livecast
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -20,8 +18,9 @@ import com.dhananjay.livecast.cast.data.repositories.AuthRepository
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
 import com.dhananjay.livecast.cast.ui.navigation.LiveCastNavigation
 import com.dhananjay.livecast.cast.utils.Constants
+import com.dhananjay.livecast.platform.getOrCreatePersistentDeviceId
+import com.dhananjay.livecast.platform.initDeviceInfo
 import com.dhananjay.livecast.ui.theme.LiveCastTheme
-import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.KoinAndroidContext
 
@@ -33,45 +32,13 @@ class MainActivity : ComponentActivity() {
     private val viewModel by inject<MainViewModel>()
     private val authRepository: AuthRepository by inject()
     private var isViewer = false
-    private val TAG = javaClass.simpleName
-    
-    private val signInLauncher = registerForActivityResult(FirebaseAuthUIActivityResultContract()) { result ->
-        when (result.resultCode) {
-            RESULT_OK -> {
-                Log.d(TAG, "Sign-in successful: ${result.idpResponse}")
-                if (!authRepository.isLoggedIn()) {
-                    Toast.makeText(this, "Login failed. Please try again.", Toast.LENGTH_SHORT).show()
-                    return@registerForActivityResult
-                }
-                val user = authRepository.getCurrentUser()!!
-                viewModel.addUser(
-                    LiveCastUser(
-                        user.uid,
-                        user.displayName ?: "User",
-                        user.email,
-                        user.phoneNumber,
-                        user.photoUrl.toString(),
-                        isViewer = isViewer,
-                        widthPixels = resources.displayMetrics.widthPixels,
-                        heightPixels = resources.displayMetrics.heightPixels,
-                    )
-                )
-            }
-            RESULT_CANCELED -> {
-                Log.d(TAG, "Sign-in cancelled by user")
-                Toast.makeText(this, "Sign-in cancelled", Toast.LENGTH_SHORT).show()
-            }
-            else -> {
-                val error = result.idpResponse?.error
-                val errorMessage = error?.message ?: "Sign-in failed"
-                Log.e(TAG, "Sign-in error: ${error?.errorCode} - $errorMessage", error)
-                Toast.makeText(this, "Sign-in failed: $errorMessage", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize device info for unique device identification
+        initDeviceInfo(applicationContext)
+
         setContent {
             // Using shared LiveCastTheme from commonMain
             LiveCastTheme {
@@ -80,9 +47,9 @@ class MainActivity : ComponentActivity() {
                     val loginStatus by viewModel.getLoginStatus().collectAsStateWithLifecycle(false)
                     LiveCastNavigation(
                         controller = controller,
-                        onSignIn = { intent, isViewer ->
-                            this.isViewer = isViewer
-                            if (isViewer) {
+                        onLoginSuccess = { isViewerRole ->
+                            this.isViewer = isViewerRole
+                            if (isViewerRole) {
                                 startService(
                                     Intent(
                                         this@MainActivity,
@@ -92,7 +59,24 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-                            signInLauncher.launch(intent)
+                            // Add user after successful login
+                            if (authRepository.isLoggedIn()) {
+                                val user = authRepository.getCurrentUser()!!
+                                val deviceId = getOrCreatePersistentDeviceId()
+                                viewModel.addUser(
+                                    LiveCastUser(
+                                        user.uid,
+                                        user.displayName ?: "User",
+                                        user.email,
+                                        user.phoneNumber,
+                                        user.photoUrl.toString(),
+                                        isViewer = isViewerRole,
+                                        widthPixels = resources.displayMetrics.widthPixels,
+                                        heightPixels = resources.displayMetrics.heightPixels,
+                                        deviceId = deviceId
+                                    )
+                                )
+                            }
                         },
                         loginStatus,
                         onLogout = {

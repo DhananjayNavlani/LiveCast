@@ -57,13 +57,17 @@ kotlin {
 
             implementation(project.dependencies.platform(libs.firebase.android.bom))
             implementation(libs.bundles.firebase.android)
-            implementation(libs.firebase.auth.ui)
+
+            // Google Sign-In with Credential Manager
+            implementation(libs.androidx.credentials)
+            implementation(libs.androidx.credentials.play.services.auth)
+            implementation(libs.google.id)
 
             implementation(libs.koin.android)
             implementation(libs.koin.androidx.compose)
             implementation(libs.koin.androidx.work)
             
-            // Android-specific dependencies that don't work with wasmJs
+            // Android-specific dependencies (web is now a separate React module)
             implementation(libs.navigation.compose)
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.coil.compose)

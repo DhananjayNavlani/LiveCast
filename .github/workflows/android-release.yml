@@ -37,7 +37,15 @@ jobs:
       - name: Decode google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: echo "$GOOGLE_SERVICES_JSON" | base64 -d > composeApp/google-services.json
+        run: |
+          echo "$GOOGLE_SERVICES_JSON" | base64 -d > composeApp/src/google-services.json
+          # Validate JSON is properly formatted
+          if ! python3 -c "import json; json.load(open('composeApp/src/google-services.json'))"; then
+            echo "Error: google-services.json is not valid JSON"
+            cat composeApp/src/google-services.json
+            exit 1
+          fi
+          echo "google-services.json validated successfully"
 
       - name: Decode and setup keystore
         env:

@@ -104,6 +104,17 @@ class IosAuthService : AuthService {
         }
     }
 
+    override suspend fun signInWithGoogle(idToken: String): AuthResult {
+        _authState.value = AuthState.Loading
+
+        return suspendCancellableCoroutine { continuation ->
+            firebaseAuthBridge.signInWithGoogleIdToken(idToken) { result ->
+                val authResult = handleAuthResult(result)
+                continuation.resume(authResult)
+            }
+        }
+    }
+
     private fun handleAuthResult(result: com.dhananjay.livecast.auth.ios.FirebaseAuthResultData): AuthResult {
         return if (result.success && result.user != null) {
             val user = result.user!!.toUser()
@@ -122,7 +133,8 @@ class IosAuthService : AuthService {
             email = email,
             displayName = displayName,
             photoUrl = photoURL,
-            isAnonymous = isAnonymous
+            isAnonymous = isAnonymous,
+            deviceId = getOrCreatePersistentDeviceId()
         )
     }
 }

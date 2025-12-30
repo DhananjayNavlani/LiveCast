@@ -1,7 +1,7 @@
-
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Button from '../components/Button';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function LandingPage() {
   return (
@@ -16,6 +16,10 @@ export default function LandingPage() {
             <span className="font-bold text-lg text-text">LiveCast</span>
           </Link>
           <div className="flex items-center gap-4">
+            <Link to="/download" className="text-text-secondary hover:text-text transition-colors hidden sm:block">
+              Download
+            </Link>
+            <ThemeToggle />
             <Link to="/login">
               <Button variant="primary" size="sm">Get Started</Button>
             </Link>
@@ -24,7 +28,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section - Minimal & Bold */}
-      <section className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 overflow-hidden">
+      <section className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 overflow-hidden pt-20">
         {/* Subtle background effects */}
         <div className="absolute inset-0 grid-pattern opacity-50" />
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />

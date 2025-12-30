@@ -20,6 +20,10 @@ data class LiveCastUser(
     @PropertyName("photo_url")
     var photoUrl: String? = null,
 
+    // Unique device identifier - persists across sign-in methods
+    @PropertyName("device_id")
+    var deviceId: String = "",
+
     // User role
     @PropertyName("is_viewer")
     var isViewer: Boolean = false,

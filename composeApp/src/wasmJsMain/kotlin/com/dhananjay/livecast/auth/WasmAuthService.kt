@@ -45,4 +45,9 @@ class WasmAuthService : AuthService {
         println("[WasmAuth] sendPasswordResetEmail called - not implemented for Wasm")
         return AuthResult.Error("Password reset is not yet supported on web platform")
     }
+
+    override suspend fun signInWithGoogle(idToken: String): AuthResult {
+        println("[WasmAuth] signInWithGoogle called - not implemented for Wasm")
+        return AuthResult.Error("Google sign in is not yet supported on web platform")
+    }
 }

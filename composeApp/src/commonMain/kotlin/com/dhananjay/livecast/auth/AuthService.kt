@@ -1,6 +1,5 @@
 package com.dhananjay.livecast.auth
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -28,7 +27,8 @@ data class User(
     val email: String?,
     val displayName: String?,
     val photoUrl: String? = null,
-    val isAnonymous: Boolean = false
+    val isAnonymous: Boolean = false,
+    val deviceId: String? = null
 )
 
 /**
@@ -83,5 +83,10 @@ interface AuthService {
      * Send password reset email
      */
     suspend fun sendPasswordResetEmail(email: String): AuthResult
+
+    /**
+     * Sign in with Google using ID token
+     */
+    suspend fun signInWithGoogle(idToken: String): AuthResult
 }
 

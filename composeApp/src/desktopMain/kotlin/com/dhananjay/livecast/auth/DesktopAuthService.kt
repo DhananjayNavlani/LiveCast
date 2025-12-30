@@ -236,7 +236,8 @@ class DesktopAuthService : AuthService {
                         id = response.localId,
                         email = null,
                         displayName = "Guest",
-                        isAnonymous = true
+                        isAnonymous = true,
+                        deviceId = getOrCreatePersistentDeviceId()
                     )
                     saveUser(user, response.idToken)
                     _authState.value = AuthState.Authenticated(user)
@@ -253,6 +254,74 @@ class DesktopAuthService : AuthService {
                 }
             } catch (e: Exception) {
                 val errorMessage = e.message ?: "Anonymous sign in failed"
+                _authState.value = AuthState.Error(errorMessage)
+                AuthResult.Error(errorMessage, e)
+            }
+        }
+    }
+
+    override suspend fun signInWithGoogle(idToken: String): AuthResult {
+        if (firebaseApiKey == null) {
+            return AuthResult.Error("Firebase API key not configured. Set FIREBASE_API_KEY environment variable or add firebase_api_key to ~/.livecast/config.properties")
+        }
+
+        _authState.value = AuthState.Loading
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = URL("https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=$firebaseApiKey")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+
+                @Serializable
+                data class GoogleSignInRequest(
+                    val postBody: String,
+                    val requestUri: String,
+                    val returnIdpCredential: Boolean = true,
+                    val returnSecureToken: Boolean = true
+                )
+
+                val postBody = "id_token=$idToken&providerId=google.com"
+                val requestBody = json.encodeToString(
+                    GoogleSignInRequest.serializer(),
+                    GoogleSignInRequest(postBody = postBody, requestUri = "http://localhost")
+                )
+
+                connection.outputStream.use { it.write(requestBody.toByteArray()) }
+
+                val responseCode = connection.responseCode
+                val responseBody = if (responseCode == 200) {
+                    connection.inputStream.bufferedReader().use { it.readText() }
+                } else {
+                    connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                }
+
+                if (responseCode == 200) {
+                    val response = json.decodeFromString<FirebaseAuthResponse>(responseBody)
+                    val user = User(
+                        id = response.localId,
+                        email = response.email,
+                        displayName = response.displayName,
+                        isAnonymous = false,
+                        deviceId = getOrCreatePersistentDeviceId()
+                    )
+                    saveUser(user, response.idToken)
+                    _authState.value = AuthState.Authenticated(user)
+                    AuthResult.Success(user)
+                } else {
+                    val errorMessage = try {
+                        val errorResponse = json.decodeFromString<FirebaseErrorResponse>(responseBody)
+                        errorResponse.error.message
+                    } catch (e: Exception) {
+                        "Google sign in failed"
+                    }
+                    _authState.value = AuthState.Error(errorMessage)
+                    AuthResult.Error(errorMessage)
+                }
+            } catch (e: Exception) {
+                val errorMessage = e.message ?: "Google sign in failed"
                 _authState.value = AuthState.Error(errorMessage)
                 AuthResult.Error(errorMessage, e)
             }

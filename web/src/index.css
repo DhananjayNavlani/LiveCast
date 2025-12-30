@@ -28,15 +28,15 @@
 
 /* Light theme */
 .light {
-  --text: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #64748B;
-  --text-disabled: #94A3B8;
-  --background: #FFFFFF;
-  --background-light: #F8FAFC;
-  --surface: #F8FAFC;
-  --surface-light: #E2E8F0;
-  --border: #E2E8F0;
+  --text: #1E1B4B;
+  --text-secondary: #4C4882;
+  --text-muted: #6B7280;
+  --text-disabled: #9CA3AF;
+  --background: #FAF9FF;
+  --background-light: #F3F1FF;
+  --surface: #FFFFFF;
+  --surface-light: #EDE9FE;
+  --border: #DDD6FE;
   --success: #22C55E;
   --error: #EF4444;
 }
@@ -110,8 +110,8 @@ body {
 }
 
 .light .glass {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(250, 249, 255, 0.9);
+  border: 1px solid rgba(139, 92, 246, 0.1);
 }
 
 /* Animations */
@@ -208,7 +208,7 @@ body {
 
 .light .grid-pattern {
   background-image:
-    linear-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.02) 1px, transparent 1px);
+    linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px);
   background-size: 64px 64px;
 }

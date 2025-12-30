@@ -13,25 +13,26 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.dhananjay.livecast.auth.AuthLoginScreen
+import com.dhananjay.livecast.auth.LoginViewModel
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.ui.stage.StageScreen
 import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.ui.navigation.Routes
-import com.dhananjay.livecast.ui.screens.LoginScreen
 import com.dhananjay.livecast.ui.screens.UserRole
-import com.firebase.ui.auth.AuthUI
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 import kotlin.random.Random
 
 /**
- * Android-specific navigation graph that uses the shared Routes and LoginScreen
- * from commonMain while providing Android-specific functionality like Firebase Auth.
+ * Android-specific navigation graph that uses the shared Routes and AuthLoginScreen
+ * from commonMain for custom authentication (email, Google, anonymous).
  */
 @Composable
 fun LiveCastNavigation(
     controller: NavHostController,
-    onSignIn: (Intent, Boolean) -> Unit,
+    onLoginSuccess: (Boolean) -> Unit,
     loginStatus: Boolean,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
@@ -74,29 +75,22 @@ fun LiveCastNavigation(
             }
         }
         composable<Routes.LoginScreen> {
-            // Use the shared LoginScreen from commonMain
-            LoginScreen(
-                onRoleSelected = { role ->
-                    // Convert UserRole to isViewer boolean for the existing sign-in flow
+            // Use the shared AuthLoginScreen from commonMain
+            val viewModel: LoginViewModel = koinViewModel()
+            AuthLoginScreen(
+                viewModel = viewModel,
+                onLoginSuccess = { role ->
+                    // Convert UserRole to isViewer boolean for the existing flow
                     val isViewer = when (role) {
                         is UserRole.Subscriber -> true
                         is UserRole.Broadcaster -> false
                     }
-                    
-                    // Create Firebase Auth intent
-                    // Only include properly configured providers (Google, Email, Anonymous)
-                    // Remove GitHub and Twitter until they are configured in Firebase Console
-                    val intent = AuthUI.getInstance()
-                        .createSignInIntentBuilder()
-                        .setAvailableProviders(
-                            listOf(
-                                AuthUI.IdpConfig.GoogleBuilder().build(),
-                                AuthUI.IdpConfig.EmailBuilder().build(),
-                                AuthUI.IdpConfig.AnonymousBuilder().build()
-                            )
-                        )
-                        .build()
-                    onSignIn(intent, isViewer)
+                    onLoginSuccess(isViewer)
+                    controller.navigate(Routes.StageScreen) {
+                        popUpTo(Routes.LoginScreen) {
+                            inclusive = true
+                        }
+                    }
                 },
                 modifier = Modifier.fillMaxSize()
             )

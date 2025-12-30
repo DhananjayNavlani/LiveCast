@@ -55,9 +55,9 @@ export default function DownloadPage() {
       .filter(asset => asset.name.endsWith('.apk'))
       .map(asset => ({
         ...asset,
-        type: APK_PATTERNS.debug.test(asset.name) ? 'debug' : 'release'
+        type: (APK_PATTERNS.debug.test(asset.name) ? 'debug' : 'release') as const
       }))
-      .sort((a, b) => (a.type === 'release' ? -1 : 1)); // Release first
+      .sort((a) => (a.type === 'release' ? -1 : 1)); // Release first
   };
 
   const apkAssets = getApkAssets();

@@ -1,17 +1,17 @@
 package com.dhananjay.livecast.auth
 
-import android.app.Activity
-import android.content.Intent
-import com.firebase.ui.auth.AuthUI
+import com.dhananjay.livecast.platform.getOrCreatePersistentDeviceId
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
 
 /**
- * Android implementation of AuthService using Firebase Authentication with Auth UI support.
+ * Android implementation of AuthService using Firebase Authentication.
+ * Supports email/password, Google, and anonymous sign-in with device tracking.
  */
 class AndroidFirebaseAuthService(
     private val firebaseAuth: FirebaseAuth
@@ -81,6 +81,20 @@ class AndroidFirebaseAuthService(
         }
     }
 
+    override suspend fun signInWithGoogle(idToken: String): AuthResult {
+        return try {
+            _authState.value = AuthState.Loading
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            val result = firebaseAuth.signInWithCredential(credential).await()
+            result.user?.let { user ->
+                AuthResult.Success(user.toUser())
+            } ?: AuthResult.Error("Google sign in failed: No user returned")
+        } catch (e: Exception) {
+            _authState.value = AuthState.Error(e.message ?: "Google sign in failed")
+            AuthResult.Error(e.message ?: "Google sign in failed", e)
+        }
+    }
+
     override suspend fun signOut() {
         firebaseAuth.signOut()
         _authState.value = AuthState.Unauthenticated
@@ -95,43 +109,13 @@ class AndroidFirebaseAuthService(
         }
     }
 
-    /**
-     * Creates an Intent to launch Firebase Auth UI for sign in.
-     * Supports Email, Google, and Anonymous sign-in providers.
-     */
-    fun createSignInIntent(): Intent {
-        val providers = listOf(
-            AuthUI.IdpConfig.EmailBuilder().build(),
-            AuthUI.IdpConfig.GoogleBuilder().build(),
-            AuthUI.IdpConfig.AnonymousBuilder().build()
-        )
-
-        return AuthUI.getInstance()
-            .createSignInIntentBuilder()
-            .setAvailableProviders(providers)
-            .build()
-    }
-
-    /**
-     * Handle the result from Firebase Auth UI.
-     * Call this in onActivityResult or from ActivityResultLauncher.
-     */
-    fun handleSignInResult(resultCode: Int): AuthResult {
-        return if (resultCode == Activity.RESULT_OK) {
-            firebaseAuth.currentUser?.let { user ->
-                AuthResult.Success(user.toUser())
-            } ?: AuthResult.Error("Sign in failed: No user returned")
-        } else {
-            AuthResult.Error("Sign in cancelled or failed")
-        }
-    }
-
     private fun FirebaseUser.toUser(): User = User(
         id = uid,
         email = email,
         displayName = displayName,
         photoUrl = photoUrl?.toString(),
-        isAnonymous = isAnonymous
+        isAnonymous = isAnonymous,
+        deviceId = getOrCreatePersistentDeviceId()
     )
 }
 

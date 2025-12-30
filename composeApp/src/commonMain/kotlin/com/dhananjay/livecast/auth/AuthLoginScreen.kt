@@ -35,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -301,6 +300,19 @@ fun AuthLoginScreen(
 
             VerticalSpacer(24)
 
+            // Google Sign-In Button - platform-specific implementation
+            GoogleSignInButton(
+                onSignInResult = { idToken ->
+                    if (idToken != null) {
+                        selectedRole = UserRole.Subscriber
+                        viewModel.signInWithGoogle(idToken)
+                    }
+                },
+                enabled = !uiState.isLoading
+            )
+
+            VerticalSpacer(16)
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -314,7 +326,7 @@ fun AuthLoginScreen(
                 Divider(modifier = Modifier.weight(1f), color = LiveCastTheme.colors.textDisabled.copy(alpha = 0.3f))
             }
 
-            VerticalSpacer(24)
+            VerticalSpacer(16)
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
