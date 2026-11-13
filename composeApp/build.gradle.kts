@@ -90,6 +90,7 @@ kotlin {
         }
         
         commonMain.dependencies {
+            implementation(projects.protocol)
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material)
