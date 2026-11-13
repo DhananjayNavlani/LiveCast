@@ -87,6 +87,13 @@ kotlin {
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
         }
+
+        val androidUnitTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
+            }
+        }
         
         commonMain.dependencies {
             implementation(projects.designsystem)
@@ -214,6 +221,9 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
     lint {
         disable += "NullSafeMutableLiveData"

@@ -60,6 +60,7 @@ service cloud.firestore {
         allow read: if request.auth != null && (request.auth.uid == deviceId || request.auth.uid == uid);
         allow create: if request.auth != null
           && request.auth.uid == deviceId
+          && request.resource.data.uid == uid
           && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.status == 'approved'
           && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.clientUid == uid
           && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.deviceId == deviceId;

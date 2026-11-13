@@ -19,4 +19,7 @@ sealed class Routes {
     
     @Serializable
     data object StageScreen : Routes()
+
+    @Serializable
+    data object PairSupervisorScreen : Routes()
 }

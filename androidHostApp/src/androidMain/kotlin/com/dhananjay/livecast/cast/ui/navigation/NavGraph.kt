@@ -25,12 +25,15 @@ import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.ui.stage.StageScreen
 import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
 import com.dhananjay.livecast.cast.utils.Constants
+import com.dhananjay.livecast.pairing.HostPairingViewModel
+import com.dhananjay.livecast.pairing.PairSupervisorScreen
 import com.dhananjay.livecast.ui.components.LiveCastButton
 import com.dhananjay.livecast.ui.components.LiveCastButtonVariant
 import com.dhananjay.livecast.ui.components.VerticalSpacer
 import com.dhananjay.livecast.ui.navigation.Routes
 import com.dhananjay.livecast.ui.theme.LiveCastTheme
 import com.firebase.ui.auth.AuthUI
+import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import kotlin.random.Random
 
@@ -60,8 +63,15 @@ fun LiveCastNavigation(
                 val state by koinInject<RemoteDataSource>().devicesOnline.collectAsStateWithLifecycle(
                     emptyList()
                 )
+                val pairingViewModel: HostPairingViewModel = koinViewModel()
+                val pairingUiState by pairingViewModel.uiState.collectAsStateWithLifecycle()
+
                 StageScreen(
                     state = state,
+                    supervisors = pairingUiState.supervisors,
+                    onPairSupervisor = {
+                        controller.navigate(Routes.PairSupervisorScreen)
+                    },
                     onStart = {
                         context.startActivity(
                             Intent(
@@ -82,6 +92,11 @@ fun LiveCastNavigation(
                     }
                 )
             }
+        }
+        composable<Routes.PairSupervisorScreen> {
+            PairSupervisorScreen(
+                onBack = { controller.popBackStack() }
+            )
         }
         composable<Routes.LoginScreen> {
             Column(

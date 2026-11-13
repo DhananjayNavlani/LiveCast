@@ -10,6 +10,9 @@ import com.dhananjay.livecast.cast.data.repositories.AuthRepository
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
 import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
 import com.dhananjay.livecast.cast.utils.NotificationHelper
+import com.dhananjay.livecast.pairing.FirestoreHostPairingRepository
+import com.dhananjay.livecast.pairing.HostPairingRepository
+import com.dhananjay.livecast.pairing.HostPairingViewModel
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
@@ -45,6 +48,8 @@ val appModule = module {
     singleOf(::PermissionManager)
     worker { DeviceOnlineWorker(get(),get(),get()) }
     viewModel { MainViewModel(get(),get(),get()) }
+    single<HostPairingRepository> { FirestoreHostPairingRepository(get()) }
+    viewModel { HostPairingViewModel(get(), get()) }
     single { WorkManager.getInstance(get()) }
 }
 

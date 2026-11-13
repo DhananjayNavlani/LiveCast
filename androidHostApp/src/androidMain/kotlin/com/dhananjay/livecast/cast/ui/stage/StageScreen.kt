@@ -49,12 +49,15 @@ import coil3.compose.AsyncImage
 import com.dhananjay.livecast.cast.data.PermissionManager
 import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
+import com.dhananjay.livecast.protocol.Supervisor
 import org.koin.compose.koinInject
 
 
 @Composable
 fun StageScreen(
     state: List<LiveCastUser>,
+    supervisors: List<Supervisor> = emptyList(),
+    onPairSupervisor: () -> Unit = {},
     onStart: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -119,6 +122,26 @@ fun StageScreen(
             )
             Text("Welcome ${user?.name}")
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val supervisedText = if (supervisors.isEmpty()) {
+                "Not supervised yet"
+            } else {
+                "Supervised by: ${supervisors.joinToString(", ") { it.name.ifEmpty { it.email ?: it.uid } }}"
+            }
+            Text(
+                text = supervisedText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = onPairSupervisor
+            ) {
+                Text("Pair a supervisor")
+            }
         }
 
         if (user?.isViewer == true) {

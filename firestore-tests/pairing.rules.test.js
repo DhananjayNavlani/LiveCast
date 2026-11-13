@@ -330,6 +330,42 @@ test('hostApprovesBatch', async () => {
   await assertSucceeds(batch.commit());
 });
 
+test('supervisorUidFieldMustMatchDocId', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'pairingCodes', '123456'), {
+      code: '123456',
+      deviceId: 'H',
+      hostUid: 'H',
+      createdAt: Timestamp.now(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+    });
+    await setDoc(doc(db, 'pairingRequests', 'req1'), {
+      code: '123456',
+      deviceId: 'H',
+      clientUid: 'P',
+      clientName: 'Parent',
+      clientEmail: 'parent@test.com',
+      status: 'pending',
+      createdAt: Timestamp.now(),
+    });
+  });
+  const hDb = getDb('H');
+  const batch = writeBatch(hDb);
+  batch.update(doc(hDb, 'pairingRequests', 'req1'), {
+    status: 'approved',
+    decidedAt: Timestamp.now(),
+  });
+  batch.set(doc(hDb, 'devices', 'H', 'supervisors', 'P'), {
+    uid: 'WRONG_UID',
+    name: 'Parent',
+    email: 'parent@test.com',
+    requestId: 'req1',
+    addedAt: Timestamp.now(),
+  });
+  batch.delete(doc(hDb, 'pairingCodes', '123456'));
+  await assertFails(batch.commit());
+});
+
 test('supervisorWithoutApprovedRequest', async () => {
   const hDb = getDb('H');
   await assertFails(

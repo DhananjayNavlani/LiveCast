@@ -91,6 +91,10 @@ fun App() {
                     modifier = Modifier.fillMaxSize()
                 )
             }
+
+            is Routes.PairSupervisorScreen -> {
+                // Not reached on non-Android platforms
+            }
         }
     }
 }
