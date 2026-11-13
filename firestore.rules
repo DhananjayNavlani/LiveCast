@@ -1,4 +1,4 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -33,6 +33,65 @@ service cloud.firestore {
     match /config/{configId} {
       allow read: if request.auth != null;
       allow write: if false; // Admin only via Firebase Console
+    }
+
+    // Pairing codes
+    match /pairingCodes/{code} {
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.hostUid
+        && request.resource.data.hostUid == request.resource.data.deviceId
+        && request.resource.data.expiresAt <= request.time + duration.value(11, 'm');
+      allow delete: if request.auth != null && request.auth.uid == resource.data.hostUid;
+      allow update: if false;
+    }
+
+    // Devices and supervisors
+    match /devices/{deviceId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == deviceId ||
+        exists(/databases/$(database)/documents/devices/$(deviceId)/supervisors/$(request.auth.uid))
+      );
+      allow create, update: if request.auth != null && request.auth.uid == deviceId;
+      allow delete: if false;
+
+      match /supervisors/{uid} {
+        allow read: if request.auth != null && (request.auth.uid == deviceId || request.auth.uid == uid);
+        allow create: if request.auth != null
+          && request.auth.uid == deviceId
+          && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.status == 'approved'
+          && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.clientUid == uid
+          && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.deviceId == deviceId;
+        allow delete: if request.auth != null && request.auth.uid == uid;
+        allow update: if false;
+      }
+    }
+
+    // Pairing requests
+    match /pairingRequests/{id} {
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.clientUid
+        && request.resource.data.status == 'pending'
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && exists(/databases/$(database)/documents/pairingCodes/$(request.resource.data.code))
+        && get(/databases/$(database)/documents/pairingCodes/$(request.resource.data.code)).data.deviceId == request.resource.data.deviceId
+        && get(/databases/$(database)/documents/pairingCodes/$(request.resource.data.code)).data.expiresAt > request.time;
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.clientUid ||
+        request.auth.uid == resource.data.deviceId
+      );
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.deviceId
+        && resource.data.status == 'pending'
+        && (request.resource.data.status == 'approved' || request.resource.data.status == 'denied')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt']);
+      allow delete: if false;
+    }
+
+    // Collection group for supervisors
+    match /{path=**}/supervisors/{uid} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
     }
   }
 }
