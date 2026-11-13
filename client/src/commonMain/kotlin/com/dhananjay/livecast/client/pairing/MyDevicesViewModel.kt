@@ -16,11 +16,9 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MyDevicesViewModel(
-    devices: SupervisedDeviceRepository,
+    private val devicesRepository: SupervisedDeviceRepository,
     private val session: SessionProvider
 ) : ViewModel() {
-
-    private val devicesRepository = devices
 
     private val _devices = MutableStateFlow<List<HostDevice>>(emptyList())
     val devices: StateFlow<List<HostDevice>> = _devices.asStateFlow()

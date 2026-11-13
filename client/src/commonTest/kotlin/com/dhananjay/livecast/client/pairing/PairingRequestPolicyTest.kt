@@ -3,6 +3,7 @@ package com.dhananjay.livecast.client.pairing
 import com.dhananjay.livecast.auth.User
 import com.dhananjay.livecast.protocol.PairingCode
 import com.dhananjay.livecast.protocol.PairingFields
+import com.dhananjay.livecast.protocol.PairingStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -57,8 +58,43 @@ class PairingRequestPolicyTest {
         assertEquals("d1", fields[PairingFields.DEVICE_ID])
         assertEquals("u1", fields[PairingFields.CLIENT_UID])
         assertEquals("Parent", fields[PairingFields.CLIENT_NAME])
+        assertTrue(fields.containsKey(PairingFields.CLIENT_EMAIL))
         assertNull(fields[PairingFields.CLIENT_EMAIL])
         assertEquals("pending", fields[PairingFields.STATUS])
+    }
+
+    @Test
+    fun clientNameFallbacks() {
+        val code = PairingCode(
+            code = "123456",
+            deviceId = "d1",
+            hostUid = "h1",
+            createdAtEpochMs = 1000L,
+            expiresAtEpochMs = 2000L
+        )
+
+        // 1. displayName takes precedence
+        val userWithDisplayName = User(id = "u1", email = "alice@example.com", displayName = "Alice")
+        val fields1 = PairingRequestPolicy.requestFields(userWithDisplayName, code)
+        assertEquals("Alice", fields1[PairingFields.CLIENT_NAME])
+        val pending1 = PairingRequestPolicy.pendingRequest("req1", userWithDisplayName, code, 1000L)
+        assertEquals("Alice", pending1.clientName)
+        assertEquals("alice@example.com", pending1.clientEmail)
+        assertEquals(PairingStatus.PENDING, pending1.status)
+
+        // 2. Falls back to email if displayName is null
+        val userWithEmailOnly = User(id = "u2", email = "bob@example.com", displayName = null)
+        val fields2 = PairingRequestPolicy.requestFields(userWithEmailOnly, code)
+        assertEquals("bob@example.com", fields2[PairingFields.CLIENT_NAME])
+        val pending2 = PairingRequestPolicy.pendingRequest("req2", userWithEmailOnly, code, 1000L)
+        assertEquals("bob@example.com", pending2.clientName)
+
+        // 3. Falls back to "Supervisor" if both are null
+        val userWithNeither = User(id = "u3", email = null, displayName = null)
+        val fields3 = PairingRequestPolicy.requestFields(userWithNeither, code)
+        assertEquals("Supervisor", fields3[PairingFields.CLIENT_NAME])
+        val pending3 = PairingRequestPolicy.pendingRequest("req3", userWithNeither, code, 1000L)
+        assertEquals("Supervisor", pending3.clientName)
     }
 
     @Test

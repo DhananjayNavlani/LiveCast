@@ -4,10 +4,13 @@ import com.dhananjay.livecast.auth.User
 import com.dhananjay.livecast.protocol.FirestorePaths
 import com.dhananjay.livecast.protocol.PairingCode
 import com.dhananjay.livecast.protocol.PairingFields
+import com.dhananjay.livecast.protocol.PairingRequest
 import com.dhananjay.livecast.protocol.PairingStatus
 import com.dhananjay.livecast.protocol.wire
 
 object PairingRequestPolicy {
+
+    private fun clientName(user: User): String = user.displayName ?: user.email ?: "Supervisor"
 
     fun validateCode(code: PairingCode?, nowEpochMs: Long): Result<PairingCode> {
         if (code == null) return Result.failure(PairingError.InvalidOrExpiredCode)
@@ -16,14 +19,32 @@ object PairingRequestPolicy {
     }
 
     fun requestFields(user: User, code: PairingCode): Map<String, Any?> {
-        val clientName = user.displayName ?: user.email ?: "Supervisor"
         return mapOf(
             PairingFields.CODE to code.code,
             PairingFields.DEVICE_ID to code.deviceId,
             PairingFields.CLIENT_UID to user.id,
-            PairingFields.CLIENT_NAME to clientName,
+            PairingFields.CLIENT_NAME to clientName(user),
             PairingFields.CLIENT_EMAIL to user.email,
             PairingFields.STATUS to PairingStatus.PENDING.wire()
+        )
+    }
+
+    fun pendingRequest(
+        id: String,
+        user: User,
+        code: PairingCode,
+        nowEpochMs: Long
+    ): PairingRequest {
+        return PairingRequest(
+            id = id,
+            code = code.code,
+            deviceId = code.deviceId,
+            clientUid = user.id,
+            clientName = clientName(user),
+            clientEmail = user.email,
+            status = PairingStatus.PENDING,
+            createdAtEpochMs = nowEpochMs,
+            decidedAtEpochMs = null
         )
     }
 

@@ -5,7 +5,6 @@ import com.dhananjay.livecast.auth.SessionProvider
 import com.dhananjay.livecast.firestore.grpc.DocumentStore
 import com.dhananjay.livecast.firestore.grpc.EnvPropertiesFirestoreConfigSource
 import com.dhananjay.livecast.firestore.grpc.FirestoreConfigSource
-import com.dhananjay.livecast.firestore.grpc.FirestoreConnectionConfig
 import com.dhananjay.livecast.firestore.grpc.FirestoreGrpcClient
 import com.dhananjay.livecast.firestore.grpc.FirestoreQuery
 import com.dhananjay.livecast.firestore.grpc.FirestoreWrite
@@ -13,7 +12,6 @@ import com.dhananjay.livecast.protocol.FirestorePaths
 import com.dhananjay.livecast.protocol.HostDevice
 import com.dhananjay.livecast.protocol.PairingFields
 import com.dhananjay.livecast.protocol.PairingRequest
-import com.dhananjay.livecast.protocol.PairingStatus
 import com.dhananjay.livecast.protocol.hostDeviceFrom
 import com.dhananjay.livecast.protocol.normalizeTimestamps
 import com.dhananjay.livecast.protocol.pairingCodeFrom
@@ -23,8 +21,11 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import org.koin.dsl.onClose
 import java.io.File
 import java.time.Instant
+
+private val toMillis: (Any) -> Long? = { (it as? Instant)?.toEpochMilli() }
 
 class GrpcPairingRequestRepository(
     private val store: DocumentStore,
@@ -38,7 +39,7 @@ class GrpcPairingRequestRepository(
         return runCatching {
             val codePath = FirestorePaths.pairingCode(code)
             val codeDoc = store.get(codePath) ?: throw PairingError.InvalidOrExpiredCode
-            val codeData = normalizeTimestamps(codeDoc.fields) { (it as? Instant)?.toEpochMilli() }
+            val codeData = normalizeTimestamps(codeDoc.fields, toMillis)
             val pairingCode = pairingCodeFrom(code, codeData) ?: throw PairingError.InvalidOrExpiredCode
 
             val nowMs = System.currentTimeMillis()
@@ -50,16 +51,11 @@ class GrpcPairingRequestRepository(
             }
 
             val requestId = store.createWithAutoId(FirestorePaths.PAIRING_REQUESTS, requestFields)
-            val request = PairingRequest(
+            val request = PairingRequestPolicy.pendingRequest(
                 id = requestId,
-                code = code,
-                deviceId = pairingCode.deviceId,
-                clientUid = user.id,
-                clientName = user.displayName ?: user.email ?: "Supervisor",
-                clientEmail = user.email,
-                status = PairingStatus.PENDING,
-                createdAtEpochMs = nowMs,
-                decidedAtEpochMs = null
+                user = user,
+                code = pairingCode,
+                nowEpochMs = nowMs
             )
             SubmittedRequest(request, pairingCode.expiresAtEpochMs)
         }
@@ -69,7 +65,7 @@ class GrpcPairingRequestRepository(
         return store.listenDocument(FirestorePaths.pairingRequest(requestId))
             .map { doc ->
                 if (doc != null) {
-                    val data = normalizeTimestamps(doc.fields) { (it as? Instant)?.toEpochMilli() }
+                    val data = normalizeTimestamps(doc.fields, toMillis)
                     pairingRequestFrom(doc.id, data)
                 } else null
             }
@@ -100,7 +96,7 @@ class GrpcSupervisedDeviceRepository(
                 try {
                     val devDoc = store.get(FirestorePaths.device(deviceId))
                     if (devDoc != null) {
-                        val data = normalizeTimestamps(devDoc.fields) { (it as? Instant)?.toEpochMilli() }
+                        val data = normalizeTimestamps(devDoc.fields, toMillis)
                         hostDeviceFrom(deviceId, data)
                     } else null
                 } catch (_: Exception) {
@@ -123,30 +119,26 @@ private const val MISSING_CONFIG_MSG =
     "Missing FIREBASE_PROJECT_ID environment variable or firebase_project_id in ~/.livecast/config.properties"
 
 actual val pairingPlatformModule: Module = module {
-    val configSource = EnvPropertiesFirestoreConfigSource(File(System.getProperty("user.home"), ".livecast"))
-    single<FirestoreConfigSource> { configSource }
-    val config = configSource.load()
-    if (config != null) {
-        single<FirestoreConnectionConfig> { config }
-        single<DocumentStore> {
-            val idTokenProvider = get<IdTokenProvider>()
-            FirestoreGrpcClient(
-                config = get(),
-                tokenProvider = { forceRefresh -> idTokenProvider.getIdToken(forceRefresh) }
-            )
-        }
-        single<PairingRequestRepository> {
-            GrpcPairingRequestRepository(get(), get())
-        }
-        single<SupervisedDeviceRepository> {
-            GrpcSupervisedDeviceRepository(get(), get())
-        }
-    } else {
-        single<PairingRequestRepository> {
-            UnsupportedPairingRequestRepository(MISSING_CONFIG_MSG)
-        }
-        single<SupervisedDeviceRepository> {
-            UnsupportedSupervisedDeviceRepository(MISSING_CONFIG_MSG)
-        }
+    single<FirestoreConfigSource> {
+        EnvPropertiesFirestoreConfigSource(File(System.getProperty("user.home"), ".livecast"))
+    }
+    single<DocumentStore> {
+        val config = checkNotNull(get<FirestoreConfigSource>().load())
+        val idTokenProvider = get<IdTokenProvider>()
+        FirestoreGrpcClient(
+            config = config,
+            tokenProvider = { forceRefresh -> idTokenProvider.getIdToken(forceRefresh) }
+        )
+    } onClose { (it as? AutoCloseable)?.close() }
+
+    single<PairingRequestRepository> {
+        get<FirestoreConfigSource>().load()?.let {
+            GrpcPairingRequestRepository(get<DocumentStore>(), get())
+        } ?: UnsupportedPairingRequestRepository(MISSING_CONFIG_MSG)
+    }
+    single<SupervisedDeviceRepository> {
+        get<FirestoreConfigSource>().load()?.let {
+            GrpcSupervisedDeviceRepository(get<DocumentStore>(), get())
+        } ?: UnsupportedSupervisedDeviceRepository(MISSING_CONFIG_MSG)
     }
 }

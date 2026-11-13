@@ -5,7 +5,6 @@ import com.dhananjay.livecast.protocol.FirestorePaths
 import com.dhananjay.livecast.protocol.HostDevice
 import com.dhananjay.livecast.protocol.PairingFields
 import com.dhananjay.livecast.protocol.PairingRequest
-import com.dhananjay.livecast.protocol.PairingStatus
 import com.dhananjay.livecast.protocol.hostDeviceFrom
 import com.dhananjay.livecast.protocol.normalizeTimestamps
 import com.dhananjay.livecast.protocol.pairingCodeFrom
@@ -19,6 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.koin.core.module.Module
 import org.koin.dsl.module
+
+private val toMillis: (Any) -> Long? = { (it as? Timestamp)?.toDate()?.time }
 
 class FirestoreSdkPairingRequestRepository(
     private val firestore: FirebaseFirestore,
@@ -36,7 +37,7 @@ class FirestoreSdkPairingRequestRepository(
             }
 
             val rawData = codeSnap.data ?: emptyMap()
-            val codeData = normalizeTimestamps(rawData) { (it as? Timestamp)?.toDate()?.time }
+            val codeData = normalizeTimestamps(rawData, toMillis)
             val pairingCode = pairingCodeFrom(code, codeData) ?: throw PairingError.InvalidOrExpiredCode
 
             val nowMs = System.currentTimeMillis()
@@ -48,16 +49,11 @@ class FirestoreSdkPairingRequestRepository(
             }
 
             val ref = firestore.collection(FirestorePaths.PAIRING_REQUESTS).add(requestData).await()
-            val request = PairingRequest(
+            val request = PairingRequestPolicy.pendingRequest(
                 id = ref.id,
-                code = code,
-                deviceId = pairingCode.deviceId,
-                clientUid = user.id,
-                clientName = user.displayName ?: user.email ?: "Supervisor",
-                clientEmail = user.email,
-                status = PairingStatus.PENDING,
-                createdAtEpochMs = nowMs,
-                decidedAtEpochMs = null
+                user = user,
+                code = pairingCode,
+                nowEpochMs = nowMs
             )
             SubmittedRequest(request, pairingCode.expiresAtEpochMs)
         }
@@ -72,7 +68,7 @@ class FirestoreSdkPairingRequestRepository(
             }
             if (snapshot != null && snapshot.exists()) {
                 val rawData = snapshot.data ?: emptyMap()
-                val data = normalizeTimestamps(rawData) { (it as? Timestamp)?.toDate()?.time }
+                val data = normalizeTimestamps(rawData, toMillis)
                 trySend(pairingRequestFrom(snapshot.id, data))
             } else {
                 trySend(null)
@@ -114,7 +110,7 @@ class FirestoreSdkSupervisedDeviceRepository(
                             val devSnap = firestore.document(FirestorePaths.device(deviceId)).get().await()
                             if (devSnap.exists()) {
                                 val rawData = devSnap.data ?: emptyMap()
-                                val data = normalizeTimestamps(rawData) { (it as? Timestamp)?.toDate()?.time }
+                                val data = normalizeTimestamps(rawData, toMillis)
                                 hostDeviceFrom(deviceId, data)
                             } else null
                         } catch (_: Exception) {
