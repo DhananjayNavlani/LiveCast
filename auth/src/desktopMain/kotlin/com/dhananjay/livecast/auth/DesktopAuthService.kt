@@ -328,7 +328,6 @@ class DesktopAuthService(
 
         val verified = jwtEmailVerified(newIdToken)
         val updatedUser = (currentUser ?: session.user).copy(emailVerified = verified)
-        store.save(session.copy(user = updatedUser, idToken = newIdToken))
         _authState.value = AuthState.Authenticated(updatedUser)
         return Result.success(verified)
     }

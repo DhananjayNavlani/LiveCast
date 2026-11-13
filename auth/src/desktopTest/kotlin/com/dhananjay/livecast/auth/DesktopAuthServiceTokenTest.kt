@@ -175,6 +175,25 @@ class DesktopAuthServiceTokenTest {
     }
 
     @Test
+    fun refreshEmailVerificationKeepsRotatedRefreshToken() = runTest {
+        val initialToken = makeJwt(2000L, emailVerified = false)
+        val store = FakeAuthSessionStore(StoredSession(testUser.copy(emailVerified = false), initialToken, "old-rt"))
+        val refreshedToken = makeJwt(3000L, emailVerified = true)
+        val refresher = FakeTokenRefresher(Pair(refreshedToken, "new-rt"))
+
+        val authService = DesktopAuthService(
+            store = store,
+            refresher = refresher,
+            clockEpochSeconds = { 1000L }
+        )
+
+        val result = authService.refreshEmailVerification()
+        assertTrue(result.isSuccess)
+        assertEquals("new-rt", store.session?.refreshToken)
+        assertEquals(refreshedToken, store.session?.idToken)
+    }
+
+    @Test
     fun refreshEmailVerificationSignedOut() = runTest {
         val store = FakeAuthSessionStore(session = null)
         val refresher = FakeTokenRefresher(Pair("token", "rt"))
