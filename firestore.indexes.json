@@ -2,8 +2,8 @@
   "indexes": [],
   "fieldOverrides": [
     {
-      "collectionGroup": "supervisors",
-      "fieldPath": "uid",
+      "collectionGroup": "members",
+      "fieldPath": "email",
       "indexes": [
         {
           "order": "ASCENDING",

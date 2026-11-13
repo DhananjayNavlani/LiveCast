@@ -3,6 +3,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn()
+        && 'email' in request.auth.token
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function memberPath(g, email) {
+      return /databases/$(database)/documents/groups/$(g)/members/$(email);
+    }
+
+    function isMember(g) {
+      return isVerified()
+        && g is string
+        && exists(memberPath(g, myEmail()));
+    }
+
+    function roleIn(g, roles) {
+      return isVerified()
+        && g is string
+        && exists(memberPath(g, myEmail()))
+        && get(memberPath(g, myEmail())).data.role in roles;
+    }
+
+    function isEnrolledHostOf(g) {
+      return isSignedIn()
+        && g is string
+        && exists(/databases/$(database)/documents/devices/$(request.auth.uid))
+        && get(/databases/$(database)/documents/devices/$(request.auth.uid)).data.get('groupId', null) == g;
+    }
+
     // Users collection - authenticated users can read all, only owner can write
     // User document contains nested 'device' object with device info
     match /users/{userId} {
@@ -35,64 +74,91 @@ service cloud.firestore {
       allow write: if false; // Admin only via Firebase Console
     }
 
-    // Pairing codes
-    match /pairingCodes/{code} {
-      allow get: if request.auth != null;
-      allow list: if false;
-      allow create: if request.auth != null
-        && request.auth.uid == request.resource.data.hostUid
-        && request.resource.data.hostUid == request.resource.data.deviceId
-        && request.resource.data.expiresAt <= request.time + duration.value(11, 'm');
-      allow delete: if request.auth != null && request.auth.uid == resource.data.hostUid;
-      allow update: if false;
-    }
-
-    // Devices and supervisors
-    match /devices/{deviceId} {
-      allow read: if request.auth != null && (
-        request.auth.uid == deviceId ||
-        exists(/databases/$(database)/documents/devices/$(deviceId)/supervisors/$(request.auth.uid))
-      );
-      allow create, update: if request.auth != null && request.auth.uid == deviceId;
+    // Groups collection
+    match /groups/{g} {
+      allow read: if isMember(g) || isEnrolledHostOf(g);
+      allow create: if isVerified()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasAll(['name', 'ownerUid', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['name', 'ownerUid', 'createdAt'])
+        && existsAfter(memberPath(g, myEmail()))
+        && getAfter(memberPath(g, myEmail())).data.role == 'owner';
+      allow update: if roleIn(g, ['owner'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
       allow delete: if false;
 
-      match /supervisors/{uid} {
-        allow read: if request.auth != null && (request.auth.uid == deviceId || request.auth.uid == uid);
-        allow create: if request.auth != null
-          && request.auth.uid == deviceId
-          && request.resource.data.uid == uid
-          && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.status == 'approved'
-          && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.clientUid == uid
-          && getAfter(/databases/$(database)/documents/pairingRequests/$(request.resource.data.requestId)).data.deviceId == deviceId;
-        allow delete: if request.auth != null && request.auth.uid == uid;
-        allow update: if false;
+      match /members/{email} {
+        allow read: if isMember(g) || isEnrolledHostOf(g);
+        allow create: if (roleIn(g, ['owner']) || isBootstrapMember(g, email))
+          && validMemberWrite(email);
+        allow update: if roleIn(g, ['owner'])
+          && email != myEmail()
+          && request.resource.data.email == resource.data.email
+          && validMemberWrite(email);
+        allow delete: if roleIn(g, ['owner'])
+          && email != myEmail();
       }
     }
 
-    // Pairing requests
-    match /pairingRequests/{id} {
-      allow create: if request.auth != null
-        && request.auth.uid == request.resource.data.clientUid
-        && request.resource.data.status == 'pending'
-        && request.auth.token.firebase.sign_in_provider != 'anonymous'
-        && exists(/databases/$(database)/documents/pairingCodes/$(request.resource.data.code))
-        && get(/databases/$(database)/documents/pairingCodes/$(request.resource.data.code)).data.deviceId == request.resource.data.deviceId
-        && get(/databases/$(database)/documents/pairingCodes/$(request.resource.data.code)).data.expiresAt > request.time;
+    function isBootstrapMember(g, email) {
+      return isVerified()
+        && !exists(/databases/$(database)/documents/groups/$(g))
+        && existsAfter(/databases/$(database)/documents/groups/$(g))
+        && getAfter(/databases/$(database)/documents/groups/$(g)).data.ownerUid == request.auth.uid
+        && email == myEmail()
+        && request.resource.data.role == 'owner';
+    }
+
+    function validMemberWrite(email) {
+      return request.resource.data.email == email
+        && email == email.lower()
+        && request.resource.data.role in ['owner', 'supervisor', 'device']
+        && request.resource.data.keys().hasAll(['email', 'role', 'addedAt'])
+        && request.resource.data.keys().hasOnly(['email', 'role', 'name', 'addedAt']);
+    }
+
+    // Collection group for members
+    match /{path=**}/members/{email} {
+      allow read: if isVerified() && resource.data.email == myEmail();
+    }
+
+    // Devices collection
+    match /devices/{d} {
       allow read: if request.auth != null && (
-        request.auth.uid == resource.data.clientUid ||
-        request.auth.uid == resource.data.deviceId
+        request.auth.uid == d ||
+        roleIn(resource.data.groupId, ['owner', 'supervisor'])
       );
-      allow update: if request.auth != null
-        && request.auth.uid == resource.data.deviceId
-        && resource.data.status == 'pending'
-        && (request.resource.data.status == 'approved' || request.resource.data.status == 'denied')
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt']);
+      allow create: if request.auth != null
+        && request.auth.uid == d
+        && request.resource.data.hostUid == d
+        && roleIn(request.resource.data.groupId, ['device'])
+        && request.resource.data.keys().hasAll(['groupId', 'hostUid', 'displayName', 'model', 'online', 'lastSeen', 'enrolledAt'])
+        && request.resource.data.keys().hasOnly(['groupId', 'hostUid', 'displayName', 'model', 'online', 'lastSeen', 'enrolledAt']);
+      allow update: if isDeviceHeartbeat(d) || isDeviceReenroll(d) || isDeviceOwnerRemoval();
       allow delete: if false;
     }
 
-    // Collection group for supervisors
-    match /{path=**}/supervisors/{uid} {
-      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+    function isDeviceHeartbeat(d) {
+      return request.auth != null
+        && request.auth.uid == d
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['online', 'lastSeen', 'displayName', 'model']);
+    }
+
+    function isDeviceReenroll(d) {
+      return request.auth != null
+        && request.auth.uid == d
+        && resource.data.get('groupId', null) == null
+        && request.resource.data.get('hostUid', d) == d
+        && request.resource.data.get('groupId', null) != null
+        && roleIn(request.resource.data.groupId, ['device'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['groupId', 'hostUid', 'displayName', 'model', 'online', 'lastSeen', 'enrolledAt']);
+    }
+
+    function isDeviceOwnerRemoval() {
+      return resource.data.get('groupId', null) != null
+        && roleIn(resource.data.groupId, ['owner'])
+        && request.resource.data.groupId == null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['groupId']);
     }
   }
 }
