@@ -5,11 +5,20 @@ object FirestorePaths {
     const val SUPERVISORS = "supervisors"
     const val PAIRING_CODES = "pairingCodes"
     const val PAIRING_REQUESTS = "pairingRequests"
+    const val GROUPS = "groups"
+    const val MEMBERS = "members"
+
+    private val MEMBER_PATH_REGEX = Regex("""(?:^|/)groups/([^/]+)/members/([^/]+?)(?:/|$)""")
 
     fun device(deviceId: String): String = "$DEVICES/$deviceId"
     fun supervisor(deviceId: String, uid: String): String = "$DEVICES/$deviceId/$SUPERVISORS/$uid"
     fun pairingCode(code: String): String = "$PAIRING_CODES/$code"
     fun pairingRequest(id: String): String = "$PAIRING_REQUESTS/$id"
+    fun group(groupId: String): String = "$GROUPS/$groupId"
+    fun members(groupId: String): String = "$GROUPS/$groupId/$MEMBERS"
+    fun member(groupId: String, email: String): String = "$GROUPS/$groupId/$MEMBERS/${GroupRules.normalizeEmail(email)}"
+    fun groupIdFromMemberPath(path: String): String? =
+        MEMBER_PATH_REGEX.findAll(path).lastOrNull()?.groupValues?.get(1)
 }
 
 object PairingFields {
@@ -33,22 +42,6 @@ object PairingFields {
     const val EMAIL = "email"
     const val REQUEST_ID = "requestId"
     const val ADDED_AT = "addedAt"
-}
-
-fun hostDeviceFrom(id: String, data: Map<String, Any?>): HostDevice? {
-    val displayName = data[PairingFields.DISPLAY_NAME] as? String ?: return null
-    val model = data[PairingFields.MODEL] as? String ?: return null
-    val online = data[PairingFields.ONLINE] as? Boolean ?: false
-    val lastSeenEpochMs = (data[PairingFields.LAST_SEEN_EPOCH_MS] as? Number)?.toLong()
-        ?: (data[PairingFields.LAST_SEEN] as? Number)?.toLong()
-        ?: 0L
-    return HostDevice(
-        id = id,
-        displayName = displayName,
-        model = model,
-        online = online,
-        lastSeenEpochMs = lastSeenEpochMs
-    )
 }
 
 fun pairingCodeFrom(code: String, data: Map<String, Any?>): PairingCode? {
