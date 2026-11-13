@@ -56,6 +56,7 @@ android {
 
 dependencies {
     implementation(projects.client)
+    implementation(projects.auth)
     implementation(projects.core)
     implementation(projects.protocol)
     implementation(projects.transport)
@@ -63,6 +64,8 @@ dependencies {
     implementation(project.dependencies.platform(libs.firebase.android.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+
+    implementation(libs.koin.android)
 
     implementation(compose.runtime)
     implementation(compose.foundation)
