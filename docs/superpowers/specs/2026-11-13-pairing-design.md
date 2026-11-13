@@ -24,7 +24,7 @@ LiveCast is a **child-monitoring product only** (decided 2026-11-13; the "own/ma
 ## Anti-goals
 - Any host-side "remove supervisor" path (UI or rules).
 - Pairing that completes without the on-phone Allow tap; a code alone must never link devices.
-- A generic cross-platform Firestore wrapper. The user rejected multiplatform Firebase libraries because a common subset limits functionality; abstraction is per feature (`expect`/`actual`), each platform using its native path in full.
+- A *third-party* multiplatform Firebase library (the user rejected it: a common subset limits functionality). **Revised 2026-11-14 (user, option B):** our own small `DocumentStore` interface is allowed as the shared data seam for desktop (gRPC) and iOS (Swift bridge over the Firebase iOS SDK); we extend it when a feature needs a new primitive. Android keeps the full Firebase Android SDK.
 - Hidden or misleading supervision: the Allow screen states that only a parent can remove supervision.
 
 ## Constraints
