@@ -3,7 +3,6 @@ package com.dhananjay.livecast.client
 import android.app.Application
 import com.dhananjay.livecast.auth.authModule
 import com.dhananjay.livecast.client.group.clientGroupModule
-import com.dhananjay.livecast.client.pairing.clientPairingModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -12,8 +11,7 @@ class LiveCastClientApp : Application() {
         super.onCreate()
         startKoin {
             androidContext(this@LiveCastClientApp)
-            modules(authModule, clientPairingModule, clientGroupModule)
+            modules(authModule, clientGroupModule)
         }
     }
 }
-

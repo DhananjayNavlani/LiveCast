@@ -14,7 +14,8 @@ class GroupFirestoreTest {
     }
 
     @Test
-    fun groupAndMembersPaths() {
+    fun paths() {
+        assertEquals("devices/d1", FirestorePaths.device("d1"))
         assertEquals("groups/g1", FirestorePaths.group("g1"))
         assertEquals("groups/g1/members", FirestorePaths.members("g1"))
     }
