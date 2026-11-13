@@ -24,7 +24,6 @@ import com.dhananjay.livecast.ui.components.VerticalSpacer
 import com.dhananjay.livecast.ui.navigation.Routes
 import com.dhananjay.livecast.ui.screens.FeaturesScreen
 import com.dhananjay.livecast.ui.screens.LandingScreen
-import com.dhananjay.livecast.ui.screens.UserRole
 import com.dhananjay.livecast.ui.theme.LiveCastTheme
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
@@ -43,7 +42,6 @@ import org.koin.compose.viewmodel.koinViewModel
 fun App() {
     LiveCastTheme {
         var currentScreen by remember { mutableStateOf<Routes>(Routes.LandingScreen) }
-        var selectedRole by remember { mutableStateOf<UserRole?>(null) }
         
         when (currentScreen) {
             is Routes.LandingScreen -> {
@@ -74,8 +72,7 @@ fun App() {
                 val loginViewModel: LoginViewModel = koinViewModel()
                 AuthLoginScreen(
                     viewModel = loginViewModel,
-                    onLoginSuccess = { role ->
-                        selectedRole = role
+                    onLoginSuccess = {
                         currentScreen = Routes.StageScreen
                     },
                     modifier = Modifier.fillMaxSize()
@@ -88,7 +85,6 @@ fun App() {
                 val loginViewModel: LoginViewModel = koinViewModel()
                 StageScreenPlaceholder(
                     viewModel = loginViewModel,
-                    role = selectedRole ?: UserRole.Broadcaster,
                     onLogout = {
                         currentScreen = Routes.LandingScreen
                     },
@@ -106,7 +102,6 @@ fun App() {
 @Composable
 fun StageScreenPlaceholder(
     viewModel: LoginViewModel,
-    role: UserRole,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -138,10 +133,7 @@ fun StageScreenPlaceholder(
         VerticalSpacer(16)
 
         Text(
-            text = when (role) {
-                UserRole.Subscriber -> "You're logged in as a Subscriber"
-                UserRole.Broadcaster -> "You're logged in as a Broadcaster"
-            },
+            text = "You're logged in as a Broadcaster",
             style = LiveCastTheme.typography.body1,
             color = LiveCastTheme.colors.textSecondary,
             textAlign = TextAlign.Center

@@ -47,13 +47,12 @@ import com.dhananjay.livecast.platform.getPlatformCapabilities
 import com.dhananjay.livecast.ui.components.LiveCastButton
 import com.dhananjay.livecast.ui.components.LiveCastButtonVariant
 import com.dhananjay.livecast.ui.components.VerticalSpacer
-import com.dhananjay.livecast.ui.screens.UserRole
 import com.dhananjay.livecast.ui.theme.LiveCastTheme
 
 @Composable
 fun AuthLoginScreen(
     viewModel: LoginViewModel,
-    onLoginSuccess: (UserRole) -> Unit,
+    onLoginSuccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -62,11 +61,10 @@ fun AuthLoginScreen(
     val scrollState = rememberScrollState()
 
     var passwordVisible by remember { mutableStateOf(false) }
-    var selectedRole by remember { mutableStateOf<UserRole?>(null) }
 
-    LaunchedEffect(uiState.isLoggedIn, selectedRole) {
-        if (uiState.isLoggedIn && selectedRole != null) {
-            onLoginSuccess(selectedRole!!)
+    LaunchedEffect(uiState.isLoggedIn) {
+        if (uiState.isLoggedIn) {
+            onLoginSuccess()
         }
     }
 
@@ -188,7 +186,6 @@ fun AuthLoginScreen(
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 focusManager.clearFocus()
-                                selectedRole = UserRole.Broadcaster
                                 viewModel.signIn()
                             }
                         ),
@@ -260,7 +257,6 @@ fun AuthLoginScreen(
                     LiveCastButton(
                         text = if (uiState.isSignUpMode) "📡 Sign Up as Broadcaster" else "📡 Sign In as Broadcaster",
                         onClick = {
-                            selectedRole = UserRole.Broadcaster
                             viewModel.signIn()
                         },
                         variant = LiveCastButtonVariant.Primary,
@@ -303,7 +299,6 @@ fun AuthLoginScreen(
             ) {
                 OutlinedButton(
                     onClick = {
-                        selectedRole = UserRole.Broadcaster
                         viewModel.signInAsGuest()
                     },
                     modifier = Modifier.fillMaxWidth().padding(4.dp),

@@ -6,7 +6,6 @@ package com.dhananjay.livecast.platform
  * Android can both broadcast (via AccessibilityService + MediaProjection) and subscribe.
  */
 class AndroidPlatformCapabilities : PlatformCapabilities {
-    override val canBroadcast: Boolean = true
     override val platformName: String = "Android"
 }
 

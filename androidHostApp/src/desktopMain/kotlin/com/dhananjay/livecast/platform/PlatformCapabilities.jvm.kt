@@ -6,7 +6,6 @@ package com.dhananjay.livecast.platform
  * Desktop can only subscribe (view broadcasts), not broadcast.
  */
 class DesktopPlatformCapabilities : PlatformCapabilities {
-    override val canBroadcast: Boolean = false
     override val platformName: String = "Desktop"
 }
 
