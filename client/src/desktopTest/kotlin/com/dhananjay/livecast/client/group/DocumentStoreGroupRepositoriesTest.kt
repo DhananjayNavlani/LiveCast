@@ -22,18 +22,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FakeDocumentStore : DocumentStore {
     val committedWrites = mutableListOf<List<FirestoreWrite>>()
     val queriedQueries = mutableListOf<FirestoreQuery>()
+    val cancelledQueries = mutableListOf<FirestoreQuery>()
     val docs = mutableMapOf<String, FirestoreDoc>()
     var onCommit: ((List<FirestoreWrite>) -> Unit)? = null
     var onGet: ((String) -> FirestoreDoc?)? = null
@@ -51,8 +54,11 @@ class FakeDocumentStore : DocumentStore {
 
     override fun listenQuery(query: FirestoreQuery): Flow<List<FirestoreDoc>> {
         queriedQueries.add(query)
-        customListenQuery?.let { return it(query) }
-        return queryFlows.getOrPut(query) { MutableSharedFlow(replay = 1) }
+        val baseFlow = customListenQuery?.invoke(query)
+            ?: queryFlows.getOrPut(query) { MutableSharedFlow(replay = 1) }
+        return baseFlow.onCompletion {
+            cancelledQueries.add(query)
+        }
     }
 
     override suspend fun createWithAutoId(collectionPath: String, fields: Map<String, Any?>): String = "auto-id"
@@ -64,12 +70,17 @@ class FakeDocumentStore : DocumentStore {
 }
 
 class FakeSessionProvider(
-    override var currentUser: User? = null
+    override var currentUser: User? = null,
 ) : SessionProvider {
     private val _authState = MutableStateFlow<AuthState>(
         currentUser?.let { AuthState.Authenticated(it) } ?: AuthState.Unauthenticated
     )
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    fun setUser(user: User?) {
+        currentUser = user
+        _authState.value = user?.let { AuthState.Authenticated(it) } ?: AuthState.Unauthenticated
+    }
 
     override suspend fun getIdToken(forceRefresh: Boolean): String? = "fake-token"
 }
@@ -139,6 +150,19 @@ class DocumentStoreGroupRepositoriesTest {
     }
 
     @Test
+    fun createGroupAnonymousNotSignedIn() = runTest {
+        val store = FakeDocumentStore()
+        val user = User(id = "u_anon", email = null, displayName = null, isAnonymous = true)
+        val session = FakeSessionProvider(user)
+        val repo = DocumentStoreGroupRepository(store, session)
+
+        val result = repo.createGroup("Family")
+        assertTrue(result.isFailure)
+        assertIs<GroupError.NotSignedIn>(result.exceptionOrNull())
+        assertEquals(0, store.committedWrites.size)
+    }
+
+    @Test
     fun membershipsQueryCollectionGroupByLowercaseEmail() = runTest {
         val store = FakeDocumentStore()
         val user = User(id = "u1", email = "O@X.com", displayName = "Owner", emailVerified = true)
@@ -151,11 +175,15 @@ class DocumentStoreGroupRepositoriesTest {
             fields = mapOf(
                 GroupFields.NAME to "Family",
                 GroupFields.OWNER_UID to "u1",
-                GroupFields.CREATED_AT to Instant.ofEpochMilli(500L)
-            )
+                GroupFields.CREATED_AT to Instant.ofEpochMilli(500L),
+            ),
         )
 
         val flow = repo.observeMyMemberships()
+        val emitted = mutableListOf<List<GroupMembership>>()
+        val job = launch { flow.toList(emitted) }
+        testScheduler.advanceUntilIdle()
+
         assertEquals(1, store.queriedQueries.size)
         val query = store.queriedQueries[0]
         assertEquals("", query.parentPath)
@@ -172,17 +200,61 @@ class DocumentStoreGroupRepositoriesTest {
                     fields = mapOf(
                         GroupFields.EMAIL to "o@x.com",
                         GroupFields.ROLE to "owner",
-                        GroupFields.ADDED_AT to Instant.ofEpochMilli(1000L)
-                    )
-                )
-            )
+                        GroupFields.ADDED_AT to Instant.ofEpochMilli(1000L),
+                    ),
+                ),
+            ),
         )
+        testScheduler.advanceUntilIdle()
 
-        val memberships = flow.first()
+        val memberships = emitted.last()
         assertEquals(1, memberships.size)
         val m = memberships[0]
         assertEquals(Group("g1", "Family", "u1", 500L), m.group)
         assertEquals(GroupRole.OWNER, m.myRole)
+        job.cancel()
+    }
+
+    @Test
+    fun membershipsRebindOnUserSwitch() = runTest {
+        val store = FakeDocumentStore()
+        val userA = User(id = "u1", email = "a@x.com", displayName = "User A", emailVerified = true)
+        val userB = User(id = "u2", email = "b@x.com", displayName = "User B", emailVerified = true)
+        val session = FakeSessionProvider(userA)
+        val repo = DocumentStoreGroupRepository(store, session)
+
+        val emitted = mutableListOf<List<GroupMembership>>()
+        val job = launch {
+            repo.observeMyMemberships().toList(emitted)
+        }
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(1, store.queriedQueries.size)
+        val qA = store.queriedQueries[0]
+        assertEquals(listOf(GroupFields.EMAIL to "a@x.com"), qA.whereEquals)
+
+        session.setUser(userB)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(2, store.queriedQueries.size)
+        val qB = store.queriedQueries[1]
+        assertEquals(listOf(GroupFields.EMAIL to "b@x.com"), qB.whereEquals)
+
+        assertTrue(store.cancelledQueries.contains(qA), "Expected listener A to be cancelled on user switch")
+        job.cancel()
+    }
+
+    @Test
+    fun unverifiedUserGetsNoMembershipsQuery() = runTest {
+        val store = FakeDocumentStore()
+        val user = User(id = "u1", email = "o@x.com", displayName = "Owner", emailVerified = false)
+        val session = FakeSessionProvider(user)
+        val repo = DocumentStoreGroupRepository(store, session)
+
+        val flow = repo.observeMyMemberships()
+        val result = flow.first()
+        assertEquals(emptyList(), result)
+        assertEquals(0, store.queriedQueries.size)
     }
 
     @Test
@@ -193,11 +265,15 @@ class DocumentStoreGroupRepositoriesTest {
         val repo = DocumentStoreGroupRepository(store, session)
 
         store.onGet = { path ->
-            if (path == "groups/g_error") throw IllegalStateException("Cannot read group")
+            if (path == "groups/g_error") throw FirestorePermissionDeniedException(path)
             null
         }
 
         val flow = repo.observeMyMemberships()
+        val emitted = mutableListOf<List<GroupMembership>>()
+        val job = launch { flow.toList(emitted) }
+        testScheduler.advanceUntilIdle()
+
         val query = store.queriedQueries[0]
         val queryFlow = store.queryFlows[query]!!
         queryFlow.emit(
@@ -208,8 +284,8 @@ class DocumentStoreGroupRepositoriesTest {
                     fields = mapOf(
                         GroupFields.EMAIL to "o@x.com",
                         GroupFields.ROLE to "owner",
-                        GroupFields.ADDED_AT to Instant.ofEpochMilli(1000L)
-                    )
+                        GroupFields.ADDED_AT to Instant.ofEpochMilli(1000L),
+                    ),
                 ),
                 FirestoreDoc(
                     path = "projects/p/databases/(default)/documents/groups/g_missing/members/o@x.com",
@@ -217,14 +293,33 @@ class DocumentStoreGroupRepositoriesTest {
                     fields = mapOf(
                         GroupFields.EMAIL to "o@x.com",
                         GroupFields.ROLE to "owner",
-                        GroupFields.ADDED_AT to Instant.ofEpochMilli(1000L)
-                    )
-                )
-            )
+                        GroupFields.ADDED_AT to Instant.ofEpochMilli(1000L),
+                    ),
+                ),
+            ),
         )
+        testScheduler.advanceUntilIdle()
 
-        val memberships = flow.first()
-        assertEquals(emptyList(), memberships)
+        assertTrue(emitted.isNotEmpty())
+        assertEquals(emptyList(), emitted.last())
+        job.cancel()
+    }
+
+    @Test
+    fun membershipsListenerDeniedMapsToAccessLost() = runTest {
+        val store = FakeDocumentStore()
+        val user = User(id = "u1", email = "o@x.com", displayName = "Owner", emailVerified = true)
+        val session = FakeSessionProvider(user)
+        val repo = DocumentStoreGroupRepository(store, session)
+
+        store.customListenQuery = {
+            flow { throw FirestorePermissionDeniedException("members") }
+        }
+
+        val error = assertFailsWith<GroupError.AccessLost> {
+            repo.observeMyMemberships().first()
+        }
+        assertEquals("You no longer have access", error.message)
     }
 
     @Test
@@ -299,10 +394,10 @@ class DocumentStoreGroupRepositoriesTest {
                     fields = mapOf(
                         GroupFields.DISPLAY_NAME to "Zeta",
                         GroupFields.MODEL to "Pixel 7",
-                        GroupFields.GROUP_ID to "g1"
-                    )
-                )
-            )
+                        GroupFields.GROUP_ID to "g1",
+                    ),
+                ),
+            ),
         )
         store.queryFlows[q2]!!.emit(
             listOf(
@@ -312,10 +407,10 @@ class DocumentStoreGroupRepositoriesTest {
                     fields = mapOf(
                         GroupFields.DISPLAY_NAME to "Alpha",
                         GroupFields.MODEL to "Pixel 8",
-                        GroupFields.GROUP_ID to "g2"
-                    )
-                )
-            )
+                        GroupFields.GROUP_ID to "g2",
+                    ),
+                ),
+            ),
         )
 
         val devices = flow.first()
@@ -333,6 +428,68 @@ class DocumentStoreGroupRepositoriesTest {
         val devices = flow.first()
         assertEquals(emptyList(), devices)
         assertEquals(0, store.queriedQueries.size)
+    }
+
+    @Test
+    fun oneDeniedGroupKeepsOtherGroupsDevices() = runTest {
+        val store = FakeDocumentStore()
+        val repo = DocumentStoreGroupDeviceRepository(store)
+
+        val q1 = FirestoreQuery(
+            parentPath = "",
+            collectionId = "devices",
+            allDescendants = false,
+            whereEquals = listOf(GroupFields.GROUP_ID to "g1"),
+        )
+        val q2 = FirestoreQuery(
+            parentPath = "",
+            collectionId = "devices",
+            allDescendants = false,
+            whereEquals = listOf(GroupFields.GROUP_ID to "g2"),
+        )
+
+        store.customListenQuery = { query ->
+            if (query == q2) {
+                flow { throw FirestorePermissionDeniedException("devices") }
+            } else {
+                store.queryFlows.getOrPut(query) { MutableSharedFlow(replay = 1) }
+            }
+        }
+
+        val flow = repo.observeDevices(listOf("g1", "g2"))
+        store.queryFlows[q1]!!.emit(
+            listOf(
+                FirestoreDoc(
+                    path = "devices/d1",
+                    id = "d1",
+                    fields = mapOf(
+                        GroupFields.DISPLAY_NAME to "Phone",
+                        GroupFields.MODEL to "Pixel",
+                        GroupFields.GROUP_ID to "g1",
+                    ),
+                ),
+            ),
+        )
+
+        val devices = flow.first()
+        assertEquals(1, devices.size)
+        assertEquals("Phone", devices[0].displayName)
+    }
+
+    @Test
+    fun allGroupsDeniedThrowsAccessLost() = runTest {
+        val store = FakeDocumentStore()
+        val repo = DocumentStoreGroupDeviceRepository(store)
+
+        store.customListenQuery = {
+            flow { throw FirestorePermissionDeniedException("devices") }
+        }
+
+        val flow = repo.observeDevices(listOf("g1", "g2"))
+        val error = assertFailsWith<GroupError.AccessLost> {
+            flow.first()
+        }
+        assertEquals("You no longer have access", error.message)
     }
 
     @Test

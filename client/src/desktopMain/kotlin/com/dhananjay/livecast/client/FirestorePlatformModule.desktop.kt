@@ -10,7 +10,11 @@ import org.koin.dsl.module
 import org.koin.dsl.onClose
 import java.io.File
 
+const val MISSING_CONFIG_MSG =
+    "Missing FIREBASE_PROJECT_ID environment variable or firebase_project_id in ~/.livecast/config.properties"
+
 actual val firestorePlatformModule: Module = module {
+
     single<FirestoreConfigSource> {
         EnvPropertiesFirestoreConfigSource(File(System.getProperty("user.home"), ".livecast"))
     }

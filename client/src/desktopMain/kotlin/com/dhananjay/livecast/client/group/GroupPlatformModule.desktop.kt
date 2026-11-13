@@ -1,15 +1,14 @@
 package com.dhananjay.livecast.client.group
 
+import com.dhananjay.livecast.client.MISSING_CONFIG_MSG
 import com.dhananjay.livecast.client.firestorePlatformModule
 import com.dhananjay.livecast.firestore.grpc.DocumentStore
 import com.dhananjay.livecast.firestore.grpc.FirestoreConfigSource
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
-private const val MISSING_CONFIG_MSG =
-    "Missing FIREBASE_PROJECT_ID environment variable or firebase_project_id in ~/.livecast/config.properties"
-
 actual val groupPlatformModule: Module = module {
+
     includes(firestorePlatformModule)
     single<GroupRepository> {
         get<FirestoreConfigSource>().load()?.let {

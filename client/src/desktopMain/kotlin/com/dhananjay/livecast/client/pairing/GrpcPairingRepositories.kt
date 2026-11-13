@@ -16,6 +16,7 @@ import com.dhananjay.livecast.protocol.hostDeviceFrom
 import com.dhananjay.livecast.protocol.normalizeTimestamps
 import com.dhananjay.livecast.protocol.pairingCodeFrom
 import com.dhananjay.livecast.protocol.pairingRequestFrom
+import com.dhananjay.livecast.client.MISSING_CONFIG_MSG
 import com.dhananjay.livecast.client.firestorePlatformModule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -116,10 +117,8 @@ class GrpcSupervisedDeviceRepository(
     }
 }
 
-private const val MISSING_CONFIG_MSG =
-    "Missing FIREBASE_PROJECT_ID environment variable or firebase_project_id in ~/.livecast/config.properties"
-
 actual val pairingPlatformModule: Module = module {
+
     includes(firestorePlatformModule)
 
     single<PairingRequestRepository> {

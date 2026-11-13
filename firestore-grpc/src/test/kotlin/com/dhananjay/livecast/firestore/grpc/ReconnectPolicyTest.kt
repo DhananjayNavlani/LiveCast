@@ -5,6 +5,7 @@ import io.grpc.StatusRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ReconnectPolicyTest {
@@ -76,4 +77,17 @@ class ReconnectPolicyTest {
         )
         assertEquals(ReconnectAction.Fail(error), action)
     }
+
+    @Test
+    fun permissionDeniedErrorFailsWithoutRetry() {
+        val error = FirestorePermissionDeniedException("p")
+        val action = nextReconnectAction(
+            reason = StreamCloseReason.Error(error),
+            consecutiveUnauth = 0,
+            backoffMs = 1000L
+        )
+        assertIs<ReconnectAction.Fail>(action)
+        assertSame(error, action.throwable)
+    }
 }
+

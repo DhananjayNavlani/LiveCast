@@ -10,7 +10,6 @@ import com.dhananjay.livecast.protocol.GroupRole
 import com.dhananjay.livecast.protocol.GroupRules
 import com.dhananjay.livecast.protocol.GroupWrites
 import com.dhananjay.livecast.protocol.HostDevice
-
 import com.dhananjay.livecast.protocol.groupFrom
 import com.dhananjay.livecast.protocol.groupMemberFrom
 import com.dhananjay.livecast.protocol.hostDeviceFrom
@@ -19,85 +18,88 @@ import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.tasks.await
 
 private val toMillis: (Any) -> Long? = { (it as? Timestamp)?.toDate()?.time }
+
+private fun Throwable.toGroupError(): Throwable = when {
+    this is FirebaseFirestoreException && code == FirebaseFirestoreException.Code.PERMISSION_DENIED -> GroupError.AccessLost
+    this is GroupError -> this
+    cause is GroupError -> cause!!
+    else -> this
+}
 
 class FirestoreSdkGroupRepository(
     private val firestore: FirebaseFirestore,
     private val session: SessionProvider,
 ) : GroupRepository {
 
-    override fun observeMyMemberships(): Flow<List<GroupMembership>> = callbackFlow {
-        val user = session.currentUser
-        val email = user?.email
-        if (user == null || email.isNullOrBlank() || user.isAnonymous) {
-            trySend(emptyList())
-            close()
-            return@callbackFlow
-        }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeMyMemberships(): Flow<List<GroupMembership>> {
+        return session.verifiedEmail().flatMapLatest { email ->
+            if (email == null) {
+                flowOf(emptyList())
+            } else {
+                callbackFlow {
+                    val query = firestore.collectionGroup(FirestorePaths.MEMBERS)
+                        .whereEqualTo(GroupFields.EMAIL, email)
 
-        val normalizedEmail = GroupRules.normalizeEmail(email)
-        val query = firestore.collectionGroup(FirestorePaths.MEMBERS)
-            .whereEqualTo(GroupFields.EMAIL, normalizedEmail)
+                    val registration = query.addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            close(error.toGroupError())
+                            return@addSnapshotListener
+                        }
 
-        val registration = query.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                    close(GroupError.AccessLost)
-                } else {
-                    close(error)
-                }
-                return@addSnapshotListener
-            }
+                        if (snapshot != null) {
+                            val docs = snapshot.documents.map { doc ->
+                                MemberDoc(
+                                    path = doc.reference.path,
+                                    id = doc.id,
+                                    data = normalizeTimestamps(doc.data ?: emptyMap(), toMillis),
+                                )
+                            }
+                            trySend(docs)
+                        }
+                    }
 
-            if (snapshot != null) {
-                launch {
-                    val memberships = snapshot.documents.mapNotNull { doc ->
-                        val groupId = FirestorePaths.groupIdFromMemberPath(doc.reference.path) ?: return@mapNotNull null
-                        val rawData = doc.data ?: emptyMap<String, Any?>()
-                        val memberData = normalizeTimestamps(rawData, toMillis)
-                        val member = groupMemberFrom(groupId, doc.id, memberData) ?: return@mapNotNull null
-                        val groupDoc = try {
-                            firestore.document(FirestorePaths.group(groupId)).get().await()
+                    awaitClose { registration.remove() }
+                }.mapLatest { docs ->
+                    assembleMemberships(docs) { groupId ->
+                        try {
+                            val groupDoc = firestore.document(FirestorePaths.group(groupId)).get().await()
+                            if (!groupDoc.exists()) return@assembleMemberships null
+                            groupFrom(groupId, normalizeTimestamps(groupDoc.data ?: emptyMap(), toMillis))
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (_: Exception) {
                             null
                         }
-                        if (groupDoc == null || !groupDoc.exists()) return@mapNotNull null
-                        val rawGroupData = groupDoc.data ?: emptyMap<String, Any?>()
-                        val groupData = normalizeTimestamps(rawGroupData, toMillis)
-                        val group = groupFrom(groupId, groupData) ?: return@mapNotNull null
-                        GroupMembership(group, member.role)
                     }
-                    trySend(memberships)
                 }
             }
         }
-
-        awaitClose { registration.remove() }
     }
 
     override suspend fun createGroup(name: String): Result<String> {
-        val user = session.currentUser ?: return Result.failure(GroupError.NotSignedIn)
-        val email = user.email
-        if (user.isAnonymous || email.isNullOrBlank()) return Result.failure(GroupError.NotSignedIn)
-        if (!user.emailVerified) return Result.failure(GroupError.EmailNotVerified)
-        val normalizedName = GroupRules.normalizeGroupName(name)
-            ?: return Result.failure(IllegalArgumentException("Enter a group name (up to 60 characters)"))
+        val input = validateCreateGroup(session.currentUser, name).getOrElse {
+            return Result.failure(it)
+        }
 
         return runCatching {
             val groupRef = firestore.collection(FirestorePaths.GROUPS).document()
             val groupId = groupRef.id
-            val memberRef = firestore.document(FirestorePaths.member(groupId, email))
+            val memberRef = firestore.document(FirestorePaths.member(groupId, input.ownerEmail))
             val now = FieldValue.serverTimestamp()
-            val groupFields = GroupWrites.groupFields(normalizedName, user.id, now)
-            val memberFields = GroupWrites.memberFields(email, GroupRole.OWNER, user.displayName, now)
+            val groupFields = GroupWrites.groupFields(input.groupName, input.ownerUid, now)
+            val memberFields = GroupWrites.memberFields(input.ownerEmail, GroupRole.OWNER, input.ownerName, now)
 
             val batch = firestore.batch()
             batch.set(groupRef, groupFields)
@@ -107,11 +109,8 @@ class FirestoreSdkGroupRepository(
         }.fold(
             onSuccess = { Result.success(it) },
             onFailure = { e ->
-                if (e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                    Result.failure(GroupError.AccessLost)
-                } else {
-                    Result.failure(e)
-                }
+                if (e is CancellationException) throw e
+                Result.failure(e.toGroupError())
             },
         )
     }
@@ -125,11 +124,7 @@ class FirestoreSdkGroupMemberRepository(
         val query = firestore.collection(FirestorePaths.members(groupId))
         val registration = query.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                    close(GroupError.AccessLost)
-                } else {
-                    close(error)
-                }
+                close(error.toGroupError())
                 return@addSnapshotListener
             }
 
@@ -170,15 +165,14 @@ class FirestoreSdkGroupMemberRepository(
         }.fold(
             onSuccess = { Result.success(Unit) },
             onFailure = { e ->
+                if (e is CancellationException) throw e
                 val cause = (e as? FirebaseFirestoreException)?.cause ?: e
                 if (cause is GroupError.AlreadyMember) {
                     Result.failure(cause)
                 } else if (e is GroupError.AlreadyMember) {
                     Result.failure(e)
-                } else if (e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                    Result.failure(GroupError.AccessLost)
                 } else {
-                    Result.failure(e)
+                    Result.failure(e.toGroupError())
                 }
             },
         )
@@ -194,11 +188,8 @@ class FirestoreSdkGroupMemberRepository(
         }.fold(
             onSuccess = { Result.success(Unit) },
             onFailure = { e ->
-                if (e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                    Result.failure(GroupError.AccessLost)
-                } else {
-                    Result.failure(e)
-                }
+                if (e is CancellationException) throw e
+                Result.failure(e.toGroupError())
             },
         )
     }
@@ -212,11 +203,8 @@ class FirestoreSdkGroupMemberRepository(
         }.fold(
             onSuccess = { Result.success(Unit) },
             onFailure = { e ->
-                if (e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                    Result.failure(GroupError.AccessLost)
-                } else {
-                    Result.failure(e)
-                }
+                if (e is CancellationException) throw e
+                Result.failure(e.toGroupError())
             },
         )
     }
@@ -232,11 +220,7 @@ class FirestoreSdkGroupDeviceRepository(
 
         val registration = query.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                    close(GroupError.AccessLost)
-                } else {
-                    close(error)
-                }
+                close(error.toGroupError())
                 return@addSnapshotListener
             }
 
@@ -258,11 +242,7 @@ class FirestoreSdkGroupDeviceRepository(
         if (distinctIds.isEmpty()) return flowOf(emptyList())
 
         val flows = distinctIds.map { observeDevicesForGroup(it) }
-        return combine(flows) { deviceLists ->
-            deviceLists.flatMap { it }
-                .distinctBy { it.id }
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.displayName })
-        }
+        return combineGroupDevices(flows)
     }
 
     override suspend fun removeFromGroup(deviceId: String): Result<Unit> {
@@ -274,11 +254,8 @@ class FirestoreSdkGroupDeviceRepository(
         }.fold(
             onSuccess = { Result.success(Unit) },
             onFailure = { e ->
-                if (e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                    Result.failure(GroupError.AccessLost)
-                } else {
-                    Result.failure(e)
-                }
+                if (e is CancellationException) throw e
+                Result.failure(e.toGroupError())
             },
         )
     }
