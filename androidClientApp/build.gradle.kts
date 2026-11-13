@@ -5,6 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.googleServices)
 }
 
 kotlin {
@@ -58,6 +59,10 @@ dependencies {
     implementation(projects.core)
     implementation(projects.protocol)
     implementation(projects.transport)
+
+    implementation(project.dependencies.platform(libs.firebase.android.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
 
     implementation(compose.runtime)
     implementation(compose.foundation)
