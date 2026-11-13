@@ -50,6 +50,7 @@ fun MyDevicesScreen(
     onSignOut: (() -> Unit)? = null
 ) {
     val devices by viewModel.devices.collectAsState()
+    val devicesError by viewModel.devicesError.collectAsState()
     var deviceToRemove by remember { mutableStateOf<HostDevice?>(null) }
 
     Scaffold(
@@ -104,6 +105,16 @@ fun MyDevicesScreen(
             }
 
             VerticalSpacer(24)
+
+            devicesError?.let { err ->
+                Text(
+                    text = err,
+                    color = LiveCastTheme.colors.error,
+                    style = LiveCastTheme.typography.body2,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                )
+            }
 
             if (devices.isEmpty()) {
                 Box(
