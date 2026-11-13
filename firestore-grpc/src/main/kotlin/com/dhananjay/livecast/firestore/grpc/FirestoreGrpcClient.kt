@@ -31,11 +31,42 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
-private sealed interface StreamCloseReason {
+internal sealed interface StreamCloseReason {
     data object Unauthenticated : StreamCloseReason
     data object Unavailable : StreamCloseReason
     data object Completed : StreamCloseReason
     data class Error(val throwable: Throwable) : StreamCloseReason
+}
+
+internal sealed interface ReconnectAction {
+    data class RetryNow(val forceRefresh: Boolean) : ReconnectAction
+    data class RetryAfter(val delayMs: Long, val nextBackoffMs: Long) : ReconnectAction
+    data class Fail(val throwable: Throwable) : ReconnectAction
+}
+
+internal fun nextReconnectAction(
+    reason: StreamCloseReason,
+    consecutiveUnauth: Int,
+    backoffMs: Long
+): ReconnectAction {
+    return when (reason) {
+        is StreamCloseReason.Unauthenticated -> {
+            if (consecutiveUnauth == 0) {
+                ReconnectAction.RetryNow(forceRefresh = true)
+            } else {
+                ReconnectAction.Fail(Status.UNAUTHENTICATED.asRuntimeException())
+            }
+        }
+        is StreamCloseReason.Unavailable,
+        is StreamCloseReason.Completed -> {
+            val currentDelay = backoffMs.coerceAtMost(30000L)
+            val nextBackoff = (currentDelay * 2).coerceAtMost(30000L)
+            ReconnectAction.RetryAfter(delayMs = currentDelay, nextBackoffMs = nextBackoff)
+        }
+        is StreamCloseReason.Error -> {
+            ReconnectAction.Fail(reason.throwable)
+        }
+    }
 }
 
 class FirestoreGrpcClient(
@@ -185,6 +216,7 @@ class FirestoreGrpcClient(
         var resumeToken: ByteString? = null
         var backoffMs = 1000L
         var forceRefreshNext = false
+        var consecutiveUnauth = 0
 
         while (isActive) {
             val metadata = try {
@@ -219,6 +251,7 @@ class FirestoreGrpcClient(
                                 TargetChange.TargetChangeType.CURRENT -> {
                                     hasCurrent = true
                                     backoffMs = 1000L
+                                    consecutiveUnauth = 0
                                     if (!hasSeenDocInThisSnapshot && currentDoc == null) {
                                         trySend(null)
                                     }
@@ -309,20 +342,18 @@ class FirestoreGrpcClient(
                 reqObserver.onNext(listenReq)
 
                 val reason = streamClosed.await()
-                when (reason) {
-                    is StreamCloseReason.Unauthenticated -> {
-                        forceRefreshNext = true
+                when (val action = nextReconnectAction(reason, consecutiveUnauth, backoffMs)) {
+                    is ReconnectAction.RetryNow -> {
+                        forceRefreshNext = action.forceRefresh
+                        consecutiveUnauth++
                     }
-                    is StreamCloseReason.Unavailable -> {
-                        delay(backoffMs)
-                        backoffMs = (backoffMs * 2).coerceAtMost(30000L)
+                    is ReconnectAction.RetryAfter -> {
+                        delay(action.delayMs)
+                        backoffMs = action.nextBackoffMs
                     }
-                    is StreamCloseReason.Completed -> {
-                        // Reopen if still active
-                    }
-                    is StreamCloseReason.Error -> {
+                    is ReconnectAction.Fail -> {
                         if (isActive) {
-                            close(reason.throwable)
+                            close(action.throwable)
                         }
                         break
                     }
@@ -334,14 +365,24 @@ class FirestoreGrpcClient(
                 throw e
             } catch (e: Exception) {
                 val status = Status.fromThrowable(e)
-                if (status.code == Status.Code.UNAUTHENTICATED) {
-                    forceRefreshNext = true
-                } else if (status.code == Status.Code.UNAVAILABLE) {
-                    delay(backoffMs)
-                    backoffMs = (backoffMs * 2).coerceAtMost(30000L)
-                } else {
-                    if (isActive) close(e)
-                    break
+                val reason = when (status.code) {
+                    Status.Code.UNAUTHENTICATED -> StreamCloseReason.Unauthenticated
+                    Status.Code.UNAVAILABLE -> StreamCloseReason.Unavailable
+                    else -> StreamCloseReason.Error(e)
+                }
+                when (val action = nextReconnectAction(reason, consecutiveUnauth, backoffMs)) {
+                    is ReconnectAction.RetryNow -> {
+                        forceRefreshNext = action.forceRefresh
+                        consecutiveUnauth++
+                    }
+                    is ReconnectAction.RetryAfter -> {
+                        delay(action.delayMs)
+                        backoffMs = action.nextBackoffMs
+                    }
+                    is ReconnectAction.Fail -> {
+                        if (isActive) close(action.throwable)
+                        break
+                    }
                 }
             } finally {
                 try {
@@ -362,6 +403,7 @@ class FirestoreGrpcClient(
         var resumeToken: ByteString? = null
         var backoffMs = 1000L
         var forceRefreshNext = false
+        var consecutiveUnauth = 0
 
         while (isActive) {
             val metadata = try {
@@ -396,6 +438,7 @@ class FirestoreGrpcClient(
                                 TargetChange.TargetChangeType.CURRENT -> {
                                     hasCurrent = true
                                     backoffMs = 1000L
+                                    consecutiveUnauth = 0
                                     trySend(currentDocs.values.toList())
                                     dirty = false
                                 }
@@ -538,20 +581,18 @@ class FirestoreGrpcClient(
                 reqObserver.onNext(listenReq)
 
                 val reason = streamClosed.await()
-                when (reason) {
-                    is StreamCloseReason.Unauthenticated -> {
-                        forceRefreshNext = true
+                when (val action = nextReconnectAction(reason, consecutiveUnauth, backoffMs)) {
+                    is ReconnectAction.RetryNow -> {
+                        forceRefreshNext = action.forceRefresh
+                        consecutiveUnauth++
                     }
-                    is StreamCloseReason.Unavailable -> {
-                        delay(backoffMs)
-                        backoffMs = (backoffMs * 2).coerceAtMost(30000L)
+                    is ReconnectAction.RetryAfter -> {
+                        delay(action.delayMs)
+                        backoffMs = action.nextBackoffMs
                     }
-                    is StreamCloseReason.Completed -> {
-                        // Reopen if still active
-                    }
-                    is StreamCloseReason.Error -> {
+                    is ReconnectAction.Fail -> {
                         if (isActive) {
-                            close(reason.throwable)
+                            close(action.throwable)
                         }
                         break
                     }
@@ -563,14 +604,24 @@ class FirestoreGrpcClient(
                 throw e
             } catch (e: Exception) {
                 val status = Status.fromThrowable(e)
-                if (status.code == Status.Code.UNAUTHENTICATED) {
-                    forceRefreshNext = true
-                } else if (status.code == Status.Code.UNAVAILABLE) {
-                    delay(backoffMs)
-                    backoffMs = (backoffMs * 2).coerceAtMost(30000L)
-                } else {
-                    if (isActive) close(e)
-                    break
+                val reason = when (status.code) {
+                    Status.Code.UNAUTHENTICATED -> StreamCloseReason.Unauthenticated
+                    Status.Code.UNAVAILABLE -> StreamCloseReason.Unavailable
+                    else -> StreamCloseReason.Error(e)
+                }
+                when (val action = nextReconnectAction(reason, consecutiveUnauth, backoffMs)) {
+                    is ReconnectAction.RetryNow -> {
+                        forceRefreshNext = action.forceRefresh
+                        consecutiveUnauth++
+                    }
+                    is ReconnectAction.RetryAfter -> {
+                        delay(action.delayMs)
+                        backoffMs = action.nextBackoffMs
+                    }
+                    is ReconnectAction.Fail -> {
+                        if (isActive) close(action.throwable)
+                        break
+                    }
                 }
             } finally {
                 try {
