@@ -1,5 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.DisableCacheInKotlinVersion
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCacheApi
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -14,6 +16,8 @@ plugins {
 }
 
 kotlin {
+    jvmToolchain(25)
+
     androidTarget {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
@@ -28,9 +32,21 @@ kotlin {
             baseName = "ComposeApp"
             isStatic = true
         }
+        // Replaces gradle.properties `kotlin.native.cacheKind=none`, removed in Kotlin 2.3.20.
+        iosTarget.binaries.configureEach {
+            @OptIn(KotlinNativeCacheApi::class)
+            disableNativeCache(
+                version = DisableCacheInKotlinVersion.`2_3_21`,
+                reason = "Preserve the previous kotlin.native.cacheKind=none behavior",
+            )
+        }
     }
     
-    jvm("desktop")
+    jvm("desktop") {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_25)
+        }
+    }
     
     sourceSets {
         val desktopMain by getting
