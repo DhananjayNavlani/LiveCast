@@ -6,10 +6,16 @@ import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
 import com.dhananjay.livecast.auth.EmailVerifier
 import com.dhananjay.livecast.auth.SessionProvider
+import com.dhananjay.livecast.auth.User
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -48,35 +54,39 @@ class EnrollmentViewModel(
 
     private var lastCandidates: List<EnrollmentCandidate> = emptyList()
 
+    private var authScope: CoroutineScope? = null
+    private var deviceJob: Job? = null
+    private var lookupJob: Job? = null
+
     init {
         viewModelScope.launch {
             session.authState.collectLatest { authState ->
                 when (authState) {
                     is AuthState.Authenticated -> {
-                        val user = authState.user
-                        val email = user.email
-                        registry.observeDevice(user.id).collectLatest { device ->
-                            val groupId = device?.groupId
-                            if (groupId != null) {
-                                _state.value = EnrollmentUiState.Enrolled(groupId)
-                            } else {
-                                if (user.isAnonymous || email.isNullOrBlank()) {
-                                    _state.value = EnrollmentUiState.NoEmail
-                                } else if (!user.emailVerified) {
-                                    _state.value = EnrollmentUiState.VerifyEmail(email = email)
-                                } else {
-                                    loadCandidatesInternal(email)
+                        coroutineScope {
+                            authScope = this
+                            try {
+                                startDeviceObservation(authState.user, this)
+                                awaitCancellation()
+                            } finally {
+                                if (authScope === this) {
+                                    authScope = null
+                                    deviceJob = null
+                                    lookupJob = null
                                 }
                             }
                         }
                     }
                     AuthState.Loading -> {
+                        cancelAuthJobs()
                         _state.value = EnrollmentUiState.Loading
                     }
                     is AuthState.Error -> {
+                        cancelAuthJobs()
                         _state.value = EnrollmentUiState.Error(authState.message)
                     }
                     AuthState.Unauthenticated -> {
+                        cancelAuthJobs()
                         _state.value = EnrollmentUiState.NoEmail
                     }
                 }
@@ -84,22 +94,61 @@ class EnrollmentViewModel(
         }
     }
 
-    private suspend fun loadCandidatesInternal(email: String) {
-        _state.value = EnrollmentUiState.Loading
-        val result = directory.candidates(email)
-        result.fold(
-            onSuccess = { candidates ->
-                lastCandidates = candidates
-                when (candidates.size) {
-                    0 -> _state.value = EnrollmentUiState.NotMember(email)
-                    1 -> _state.value = EnrollmentUiState.Confirm(candidate = candidates[0], canGoBack = false)
-                    else -> _state.value = EnrollmentUiState.ChooseGroup(candidates = candidates)
+    private fun cancelAuthJobs() {
+        authScope = null
+        deviceJob?.cancel()
+        deviceJob = null
+        lookupJob?.cancel()
+        lookupJob = null
+    }
+
+    private fun startDeviceObservation(user: User, scope: CoroutineScope) {
+        deviceJob?.cancel()
+        deviceJob = scope.launch {
+            val email = user.email
+            registry.observeDevice(user.id)
+                .catch { e ->
+                    _state.value = EnrollmentUiState.Error(e.message ?: "Failed to observe device")
                 }
-            },
-            onFailure = { e ->
-                _state.value = EnrollmentUiState.Error(e.message ?: "Failed to load groups")
-            }
-        )
+                .collectLatest { device ->
+                    val groupId = device?.groupId
+                    if (groupId != null) {
+                        lookupJob?.cancel()
+                        _state.value = EnrollmentUiState.Enrolled(groupId)
+                    } else {
+                        if (user.isAnonymous || email.isNullOrBlank()) {
+                            lookupJob?.cancel()
+                            _state.value = EnrollmentUiState.NoEmail
+                        } else if (!user.emailVerified) {
+                            lookupJob?.cancel()
+                            _state.value = EnrollmentUiState.VerifyEmail(email = email)
+                        } else {
+                            startLookup(email, scope)
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun startLookup(email: String, scope: CoroutineScope) {
+        lookupJob?.cancel()
+        lookupJob = scope.launch {
+            _state.value = EnrollmentUiState.Loading
+            val result = directory.candidates(email)
+            result.fold(
+                onSuccess = { candidates ->
+                    lastCandidates = candidates
+                    when (candidates.size) {
+                        0 -> _state.value = EnrollmentUiState.NotMember(email)
+                        1 -> _state.value = EnrollmentUiState.Confirm(candidate = candidates[0], canGoBack = false)
+                        else -> _state.value = EnrollmentUiState.ChooseGroup(candidates = candidates)
+                    }
+                },
+                onFailure = { e ->
+                    _state.value = EnrollmentUiState.Error(e.message ?: "Failed to load groups")
+                }
+            )
+        }
     }
 
     fun sendVerification() {
@@ -136,9 +185,7 @@ class EnrollmentViewModel(
                 val result = verifier.refreshEmailVerification()
                 result.fold(
                     onSuccess = { verified ->
-                        if (verified) {
-                            loadCandidatesInternal(current.email)
-                        } else {
+                        if (!verified) {
                             val latest = _state.value
                             if (latest is EnrollmentUiState.VerifyEmail) {
                                 _state.value = latest.copy(
@@ -164,11 +211,12 @@ class EnrollmentViewModel(
 
     fun retry() {
         val user = (session.authState.value as? AuthState.Authenticated)?.user ?: return
+        val scope = authScope ?: return
         val email = user.email
-        if (!email.isNullOrBlank()) {
-            viewModelScope.launch {
-                loadCandidatesInternal(email)
-            }
+        if (deviceJob?.isActive != true) {
+            startDeviceObservation(user, scope)
+        } else if (!email.isNullOrBlank()) {
+            startLookup(email, scope)
         }
     }
 

@@ -83,6 +83,7 @@ fun LiveCastNavigation(
                 StageScreen(
                     state = state,
                     supervisorNames = supervisedState.supervisorNames,
+                    supervisedState = supervisedState,
                     onStart = {
                         context.startActivity(
                             Intent(
@@ -137,16 +138,6 @@ fun LiveCastNavigation(
             )
         }
         composable<Routes.LoginScreen> {
-            LaunchedEffect(loginStatus) {
-                if (loginStatus) {
-                    controller.navigate(Routes.EnrollScreen) {
-                        popUpTo(Routes.LoginScreen) {
-                            inclusive = true
-                        }
-                    }
-                }
-            }
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()

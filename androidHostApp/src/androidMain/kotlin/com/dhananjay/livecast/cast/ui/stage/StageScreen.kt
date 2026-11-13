@@ -49,6 +49,7 @@ import coil3.compose.AsyncImage
 import com.dhananjay.livecast.cast.data.PermissionManager
 import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
+import com.dhananjay.livecast.group.SupervisedByUiState
 import org.koin.compose.koinInject
 
 
@@ -56,6 +57,7 @@ import org.koin.compose.koinInject
 fun StageScreen(
     state: List<LiveCastUser>,
     supervisorNames: List<String> = emptyList(),
+    supervisedState: SupervisedByUiState = SupervisedByUiState(enrolled = true, supervisorNames = supervisorNames),
     onStart: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -122,15 +124,16 @@ fun StageScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            val supervisedText = if (supervisorNames.isEmpty()) {
-                "Not supervised yet"
-            } else {
-                "Supervised by: ${supervisorNames.joinToString(", ")}"
+            val names = supervisedState.supervisorNames.ifEmpty { supervisorNames }
+            val supervisedText = when {
+                supervisedState.error != null -> "Couldn't load supervisors"
+                names.isNotEmpty() -> "Supervised by: ${names.joinToString(", ")}"
+                else -> "Loading supervisors..."
             }
             Text(
                 text = supervisedText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (supervisedState.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
             )
 
 

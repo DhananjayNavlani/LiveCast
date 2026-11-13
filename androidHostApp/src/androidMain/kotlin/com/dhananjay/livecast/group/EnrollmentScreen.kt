@@ -236,7 +236,7 @@ fun EnrollmentScreen(
                     }
                     VerticalSpacer(24)
                     LiveCastButton(
-                        text = "Confirm Enrollment",
+                        text = "Continue",
                         onClick = onConfirm,
                         variant = LiveCastButtonVariant.Primary,
                         modifier = Modifier.fillMaxWidth()

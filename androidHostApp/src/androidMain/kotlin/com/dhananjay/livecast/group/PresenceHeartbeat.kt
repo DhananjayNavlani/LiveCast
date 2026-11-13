@@ -2,8 +2,11 @@ package com.dhananjay.livecast.group
 
 import com.dhananjay.livecast.protocol.GroupRules
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class PresenceHeartbeat(
     private val reporter: PresenceReporter,
@@ -12,12 +15,19 @@ class PresenceHeartbeat(
     suspend fun run(deviceId: String): Nothing {
         try {
             while (true) {
-                reporter.report(deviceId, true)
-                delay(intervalMs)
+                coroutineScope {
+                    val delayJob = launch { delay(intervalMs) }
+                    withTimeoutOrNull(intervalMs) {
+                        reporter.report(deviceId, true)
+                    }
+                    delayJob.join()
+                }
             }
         } finally {
             withContext(NonCancellable) {
-                reporter.report(deviceId, false)
+                withTimeoutOrNull(10_000L) {
+                    reporter.report(deviceId, false)
+                }
             }
         }
     }

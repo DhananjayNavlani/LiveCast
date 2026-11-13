@@ -38,10 +38,11 @@ class SupervisedByViewModelTest {
     private class FakeDeviceRegistry : DeviceRegistry {
         val deviceFlow = MutableSharedFlow<HostDevice?>(replay = 1)
         var observedDeviceId: String? = null
+        var customFlow: Flow<HostDevice?>? = null
 
         override fun observeDevice(deviceId: String): Flow<HostDevice?> {
             observedDeviceId = deviceId
-            return deviceFlow
+            return customFlow ?: deviceFlow
         }
 
         override suspend fun enroll(device: HostDevice, groupId: String): Result<Unit> = Result.success(Unit)
@@ -146,5 +147,47 @@ class SupervisedByViewModelTest {
         assertEquals(true, vm.state.value.enrolled)
         assertNotNull(vm.state.value.error)
         assertTrue(vm.state.value.supervisorNames.isEmpty())
+    }
+
+    @Test
+    fun deviceListenerErrorKeepsEnrolled() = runTest {
+        val identity = FakeDeviceIdentity("dev-1")
+        val registry = FakeDeviceRegistry()
+        val members = FakeGroupMembersDirectory()
+
+        registry.customFlow = flow {
+            emit(HostDevice(id = "dev-1", displayName = "Pixel", model = "P8", groupId = "g1"))
+            throw RuntimeException("Device listener error")
+        }
+
+        val vm = SupervisedByViewModel(identity, registry, members)
+        advanceUntilIdle()
+
+        assertEquals(true, vm.state.value.enrolled)
+        assertNotNull(vm.state.value.error)
+    }
+
+    @Test
+    fun heartbeatSnapshotDoesNotResubscribeMembers() = runTest {
+        val identity = FakeDeviceIdentity("dev-1")
+        val registry = FakeDeviceRegistry()
+        val members = FakeGroupMembersDirectory()
+
+        registry.deviceFlow.tryEmit(
+            HostDevice(id = "dev-1", displayName = "Pixel", model = "P8", groupId = "g1", lastSeenEpochMs = 1000L)
+        )
+
+        val vm = SupervisedByViewModel(identity, registry, members)
+        advanceUntilIdle()
+
+        assertEquals(1, members.observedGroups.size)
+
+        // Heartbeat snapshot: same groupId, updated lastSeen
+        registry.deviceFlow.tryEmit(
+            HostDevice(id = "dev-1", displayName = "Pixel", model = "P8", groupId = "g1", lastSeenEpochMs = 46000L)
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, members.observedGroups.size)
     }
 }

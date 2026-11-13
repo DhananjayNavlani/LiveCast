@@ -11,6 +11,7 @@ import com.dhananjay.livecast.protocol.GroupRole
 import com.dhananjay.livecast.protocol.HostDevice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,8 +19,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -58,7 +61,9 @@ class EnrollmentViewModelTest {
         override suspend fun getIdToken(forceRefresh: Boolean): String? = "fake-token"
     }
 
-    private class FakeEmailVerifier : EmailVerifier {
+    private class FakeEmailVerifier(
+        private val session: FakeSessionProvider? = null
+    ) : EmailVerifier {
         var refreshResult: Result<Boolean> = Result.success(true)
         var sendResult: AuthResult = AuthResult.Success(User("uid", "email", "name"))
         var refreshCalls = 0
@@ -71,6 +76,13 @@ class EnrollmentViewModelTest {
 
         override suspend fun refreshEmailVerification(): Result<Boolean> {
             refreshCalls++
+            val verified = refreshResult.getOrDefault(false)
+            if (verified && session != null) {
+                val current = session.currentUser
+                if (current != null) {
+                    session.authStateFlow.value = AuthState.Authenticated(current.copy(emailVerified = true))
+                }
+            }
             return refreshResult
         }
     }
@@ -102,6 +114,7 @@ class EnrollmentViewModelTest {
         val enrollCalls = mutableListOf<Pair<HostDevice, String>>()
         var enrollResult: Result<Unit> = Result.success(Unit)
         var enrollDelayMs = 0L
+        var customFlowForDevice: ((String) -> Flow<HostDevice?>)? = null
 
         fun flowFor(deviceId: String): MutableSharedFlow<HostDevice?> {
             return deviceFlows.getOrPut(deviceId) { MutableSharedFlow(replay = 1) }
@@ -110,7 +123,12 @@ class EnrollmentViewModelTest {
         override fun observeDevice(deviceId: String): Flow<HostDevice?> = flow {
             observedDeviceIds.add(deviceId)
             try {
-                flowFor(deviceId).collect { emit(it) }
+                val custom = customFlowForDevice?.invoke(deviceId)
+                if (custom != null) {
+                    custom.collect { emit(it) }
+                } else {
+                    flowFor(deviceId).collect { emit(it) }
+                }
             } finally {
                 cancelledDeviceIds.add(deviceId)
             }
@@ -129,7 +147,7 @@ class EnrollmentViewModelTest {
     fun alreadyEnrolledShowsEnrolled() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -148,7 +166,7 @@ class EnrollmentViewModelTest {
     fun anonymousShowsNoEmail() = runTest {
         val user = User(id = "uid1", email = null, displayName = "Guest", isAnonymous = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -167,7 +185,7 @@ class EnrollmentViewModelTest {
     fun unverifiedShowsVerifyEmail() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = false)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -186,7 +204,7 @@ class EnrollmentViewModelTest {
     fun checkVerificationReloadsCandidates() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = false)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -218,10 +236,42 @@ class EnrollmentViewModelTest {
     }
 
     @Test
+    fun checkVerificationLoadsCandidatesOnce() = runTest {
+        val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = false)
+        val session = FakeSessionProvider(user)
+        val verifier = FakeEmailVerifier(session)
+        val deviceInfo = FakeHostDeviceInfoProvider()
+        val directory = FakeEnrollmentDirectory()
+        val registry = FakeDeviceRegistry()
+
+        val candidate = EnrollmentCandidate(
+            group = Group(id = "g1", name = "Family", ownerUid = "o1", createdAtEpochMs = 1000L),
+            supervisors = listOf(
+                GroupMember("g1", "mum@x.com", GroupRole.OWNER, "Mum", 100L)
+            )
+        )
+        directory.candidatesResult = Result.success(listOf(candidate))
+        verifier.refreshResult = Result.success(true)
+
+        registry.flowFor("uid1").tryEmit(
+            HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
+        )
+
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        advanceUntilIdle()
+
+        vm.checkVerification()
+        advanceUntilIdle()
+
+        assertEquals(1, directory.queriedEmails.size)
+        assertEquals("kid@x.com", directory.queriedEmails[0])
+    }
+
+    @Test
     fun checkVerificationStillUnverified() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = false)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -247,7 +297,7 @@ class EnrollmentViewModelTest {
     fun noMembershipShowsNotMember() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -267,7 +317,7 @@ class EnrollmentViewModelTest {
     fun singleCandidateShowsConfirm() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -297,7 +347,7 @@ class EnrollmentViewModelTest {
     fun multipleCandidatesShowsPicker() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -332,7 +382,7 @@ class EnrollmentViewModelTest {
     fun confirmEnrollsWithGroupId() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -355,14 +405,17 @@ class EnrollmentViewModelTest {
         assertEquals(1, registry.enrollCalls.size)
         val (device, groupId) = registry.enrollCalls[0]
         assertEquals("g1", groupId)
-        assertEquals("uid1", device.id)
+        val expectedDevice = deviceInfo.current(user.id)
+        assertEquals(expectedDevice, device)
+        assertEquals("Pixel 8", device.displayName)
+        assertEquals("Pixel 8", device.model)
     }
 
     @Test
     fun confirmIgnoredWhileBusy() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -392,7 +445,7 @@ class EnrollmentViewModelTest {
     fun enrollFailureShowsError() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -423,7 +476,7 @@ class EnrollmentViewModelTest {
     fun removalReturnsToNotEnrolled() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -455,7 +508,7 @@ class EnrollmentViewModelTest {
     fun directoryFailureShowsErrorAndRetryRecovers() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
         val session = FakeSessionProvider(user)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -487,7 +540,7 @@ class EnrollmentViewModelTest {
         val userA = User(id = "user-a", email = "a@x.com", displayName = "User A", emailVerified = true)
         val userB = User(id = "user-b", email = "b@x.com", displayName = "User B", emailVerified = true)
         val session = FakeSessionProvider(userA)
-        val verifier = FakeEmailVerifier()
+        val verifier = FakeEmailVerifier(session)
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
@@ -512,5 +565,130 @@ class EnrollmentViewModelTest {
         assertTrue("user-a" in registry.cancelledDeviceIds)
         assertTrue("user-b" in registry.observedDeviceIds)
         assertEquals(EnrollmentUiState.Enrolled("g2"), vm.state.value)
+    }
+
+    @Test
+    fun deviceListenerErrorShowsError() = runTest {
+        val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
+        val session = FakeSessionProvider(user)
+        val verifier = FakeEmailVerifier(session)
+        val deviceInfo = FakeHostDeviceInfoProvider()
+        val directory = FakeEnrollmentDirectory()
+        val registry = FakeDeviceRegistry()
+
+        var shouldThrow = true
+        registry.customFlowForDevice = {
+            flow {
+                if (shouldThrow) {
+                    throw RuntimeException("Device listener failed")
+                } else {
+                    emit(HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null))
+                }
+            }
+        }
+
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        advanceUntilIdle()
+
+        assertEquals(EnrollmentUiState.Error("Device listener failed"), vm.state.value)
+
+        // Retry with healthy flow -> recovers
+        shouldThrow = false
+        val candidate = EnrollmentCandidate(
+            group = Group(id = "g1", name = "Family", ownerUid = "o1", createdAtEpochMs = 1000L),
+            supervisors = listOf(GroupMember("g1", "mum@x.com", GroupRole.OWNER, "Mum", 100L))
+        )
+        directory.candidatesResult = Result.success(listOf(candidate))
+        vm.retry()
+        advanceUntilIdle()
+
+        assertEquals(EnrollmentUiState.Confirm(candidate, canGoBack = false), vm.state.value)
+    }
+
+    @Test
+    fun retryTwiceRunsOneLookupAtATime() = runTest {
+        val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
+        val session = FakeSessionProvider(user)
+        val verifier = FakeEmailVerifier(session)
+        val deviceInfo = FakeHostDeviceInfoProvider()
+        val registry = FakeDeviceRegistry()
+
+        var concurrentLookups = 0
+        var maxConcurrent = 0
+        var lookupCalls = 0
+        val directory = object : EnrollmentDirectory {
+            override suspend fun candidates(email: String): Result<List<EnrollmentCandidate>> {
+                lookupCalls++
+                concurrentLookups++
+                if (concurrentLookups > maxConcurrent) maxConcurrent = concurrentLookups
+                try {
+                    delay(100L)
+                    return Result.success(emptyList())
+                } finally {
+                    concurrentLookups--
+                }
+            }
+        }
+
+        registry.flowFor("uid1").tryEmit(
+            HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
+        )
+
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        advanceUntilIdle()
+
+        vm.retry()
+        runCurrent()
+        vm.retry()
+        runCurrent()
+        advanceUntilIdle()
+
+        assertEquals(1, maxConcurrent)
+        assertEquals(3, lookupCalls)
+        assertEquals(EnrollmentUiState.NotMember("kid@x.com"), vm.state.value)
+    }
+
+    @Test
+    fun userSwitchDropsStaleCandidates() = runTest {
+        val userA = User(id = "user-a", email = "a@x.com", displayName = "User A", emailVerified = true)
+        val userB = User(id = "user-b", email = "b@x.com", displayName = "User B", emailVerified = true)
+        val session = FakeSessionProvider(userA)
+        val verifier = FakeEmailVerifier(session)
+        val deviceInfo = FakeHostDeviceInfoProvider()
+        val registry = FakeDeviceRegistry()
+
+        val candidateA = EnrollmentCandidate(
+            group = Group(id = "g-a", name = "Group A", ownerUid = "o-a", createdAtEpochMs = 1000L),
+            supervisors = listOf(GroupMember("g-a", "oa@x.com", GroupRole.OWNER, "Owner A", 100L))
+        )
+        val candidateB = EnrollmentCandidate(
+            group = Group(id = "g-b", name = "Group B", ownerUid = "o-b", createdAtEpochMs = 2000L),
+            supervisors = listOf(GroupMember("g-b", "ob@x.com", GroupRole.OWNER, "Owner B", 200L))
+        )
+
+        val directory = object : EnrollmentDirectory {
+            override suspend fun candidates(email: String): Result<List<EnrollmentCandidate>> {
+                if (email == "a@x.com") {
+                    delay(500L)
+                    return Result.success(listOf(candidateA))
+                } else {
+                    return Result.success(listOf(candidateB))
+                }
+            }
+        }
+
+        registry.flowFor("user-a").tryEmit(
+            HostDevice(id = "user-a", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
+        )
+        registry.flowFor("user-b").tryEmit(
+            HostDevice(id = "user-b", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
+        )
+
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        advanceTimeBy(100L)
+        session.authStateFlow.value = AuthState.Authenticated(userB)
+        advanceUntilIdle()
+
+        assertEquals(EnrollmentUiState.Confirm(candidateB, canGoBack = false), vm.state.value)
     }
 }

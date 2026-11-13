@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -34,38 +35,50 @@ class SupervisedByViewModel(
             emit(SupervisedByUiState(enrolled = false))
             return@flow
         }
-        val flow: Flow<SupervisedByUiState> = registry.observeDevice(deviceId).flatMapLatest { device ->
-            val groupId = device?.groupId
-            if (groupId == null) {
-                flowOf(SupervisedByUiState(enrolled = false))
-            } else {
-                members.observeSupervisors(groupId)
-                    .map { supervisors ->
-                        SupervisedByUiState(
-                            enrolled = true,
-                            supervisorNames = supervisors.map { GroupRules.displayName(it) },
-                            error = null
-                        )
-                    }
-                    .catch { e ->
-                        emit(
+        var lastEnrolled: Boolean? = null
+        val flow: Flow<SupervisedByUiState> = registry.observeDevice(deviceId)
+            .map { device ->
+                val groupId = device?.groupId
+                if (groupId != null) {
+                    lastEnrolled = true
+                } else {
+                    lastEnrolled = false
+                }
+                groupId
+            }
+            .distinctUntilChanged()
+            .flatMapLatest { groupId ->
+                if (groupId == null) {
+                    flowOf(SupervisedByUiState(enrolled = false))
+                } else {
+                    members.observeSupervisors(groupId)
+                        .map { supervisors ->
                             SupervisedByUiState(
                                 enrolled = true,
-                                supervisorNames = emptyList(),
-                                error = e.message ?: "Failed to observe supervisors"
+                                supervisorNames = supervisors.map { GroupRules.displayName(it) },
+                                error = null
                             )
-                        )
-                    }
+                        }
+                        .catch { e ->
+                            emit(
+                                SupervisedByUiState(
+                                    enrolled = true,
+                                    supervisorNames = emptyList(),
+                                    error = e.message ?: "Failed to observe supervisors"
+                                )
+                            )
+                        }
+                }
             }
-        }.catch { e ->
-            emit(
-                SupervisedByUiState(
-                    enrolled = false,
-                    supervisorNames = emptyList(),
-                    error = e.message ?: "Failed to observe device"
+            .catch { e ->
+                emit(
+                    SupervisedByUiState(
+                        enrolled = lastEnrolled,
+                        supervisorNames = emptyList(),
+                        error = e.message ?: "Failed to observe device"
+                    )
                 )
-            )
-        }
+            }
         emitAll(flow)
     }.stateIn(
         scope = viewModelScope,
