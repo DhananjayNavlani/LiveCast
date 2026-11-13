@@ -83,5 +83,10 @@ interface AuthService {
      * Send password reset email
      */
     suspend fun sendPasswordResetEmail(email: String): AuthResult
+
+    /**
+     * Get the current user's ID token.
+     */
+    suspend fun getIdToken(forceRefresh: Boolean = false): String?
 }
 

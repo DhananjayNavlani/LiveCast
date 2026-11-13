@@ -38,4 +38,6 @@ class IosAuthService : AuthService {
     override suspend fun sendPasswordResetEmail(email: String): AuthResult {
         return AuthResult.Error("iOS Firebase auth not yet implemented (swiftklib removed; see M1 Swift bridge)")
     }
+
+    override suspend fun getIdToken(forceRefresh: Boolean): String? = null
 }

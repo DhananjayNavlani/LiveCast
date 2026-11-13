@@ -15,6 +15,11 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
         }
 
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
+        }
+
         androidMain.dependencies {
             implementation(project.dependencies.platform(libs.firebase.android.bom))
             implementation(libs.firebase.auth)

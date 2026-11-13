@@ -95,6 +95,17 @@ class AndroidFirebaseAuthService(
         }
     }
 
+    override suspend fun getIdToken(forceRefresh: Boolean): String? {
+        return try {
+            (firebaseAuth.currentUser ?: FirebaseAuth.getInstance().currentUser)
+                ?.getIdToken(forceRefresh)
+                ?.await()
+                ?.token
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Creates an Intent to launch Firebase Auth UI for sign in.
      * Supports Email, Google, and Anonymous sign-in providers.

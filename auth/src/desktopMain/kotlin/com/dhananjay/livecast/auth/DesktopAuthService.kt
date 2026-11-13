@@ -10,7 +10,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
+import java.net.URLEncoder
 import java.util.Properties
 
 /**
@@ -18,9 +20,10 @@ import java.util.Properties
  * Connects to Firebase Authentication backend for real authentication.
  * Requires FIREBASE_API_KEY environment variable or in .livecast/config.properties
  */
-class DesktopAuthService : AuthService {
+class DesktopAuthService(
+    private val configDir: File = File(System.getProperty("user.home"), ".livecast")
+) : AuthService {
 
-    private val configDir = File(System.getProperty("user.home"), ".livecast")
     private val authFile = File(configDir, "auth.properties")
     private val configFile = File(configDir, "config.properties")
 
@@ -122,7 +125,7 @@ class DesktopAuthService : AuthService {
                         displayName = response.displayName,
                         isAnonymous = false
                     )
-                    saveUser(user, response.idToken)
+                    saveUser(user, response.idToken, response.refreshToken)
                     _authState.value = AuthState.Authenticated(user)
                     AuthResult.Success(user)
                 } else {
@@ -180,7 +183,7 @@ class DesktopAuthService : AuthService {
                         displayName = response.displayName,
                         isAnonymous = false
                     )
-                    saveUser(user, response.idToken)
+                    saveUser(user, response.idToken, response.refreshToken)
                     _authState.value = AuthState.Authenticated(user)
                     AuthResult.Success(user)
                 } else {
@@ -238,7 +241,7 @@ class DesktopAuthService : AuthService {
                         displayName = "Guest",
                         isAnonymous = true
                     )
-                    saveUser(user, response.idToken)
+                    saveUser(user, response.idToken, response.refreshToken)
                     _authState.value = AuthState.Authenticated(user)
                     AuthResult.Success(user)
                 } else {
@@ -314,7 +317,82 @@ class DesktopAuthService : AuthService {
         }
     }
 
-    private fun saveUser(user: User, idToken: String) {
+    override suspend fun getIdToken(forceRefresh: Boolean): String? {
+        val (storedIdToken, refreshToken) = loadStoredTokens() ?: return null
+        val nowEpochSeconds = System.currentTimeMillis() / 1000L
+
+        if (!forceRefresh && !needsRefresh(storedIdToken, nowEpochSeconds)) {
+            return storedIdToken
+        }
+
+        if (refreshToken.isNullOrBlank()) {
+            return null
+        }
+
+        return withContext(Dispatchers.IO) {
+            refreshIdToken(refreshToken)
+        }
+    }
+
+    private fun loadStoredTokens(): Pair<String, String?>? {
+        return try {
+            if (!authFile.exists()) return null
+            val props = Properties().apply {
+                authFile.inputStream().use { load(it) }
+            }
+            val idToken = props.getProperty("id_token") ?: return null
+            val refreshToken = props.getProperty("refresh_token")
+            Pair(idToken, refreshToken)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun refreshIdToken(refreshToken: String): String? {
+        val apiKey = firebaseApiKey ?: return null
+        return try {
+            val url = URI("https://securetoken.googleapis.com/v1/token?key=$apiKey").toURL()
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            connection.doOutput = true
+
+            val requestBody = "grant_type=refresh_token&refresh_token=" + URLEncoder.encode(refreshToken, "UTF-8")
+            connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
+
+            val responseCode = connection.responseCode
+            if (responseCode == 200) {
+                val responseBody = connection.inputStream.bufferedReader().use { it.readText() }
+                val tokenResponse = json.decodeFromString<SecureTokenResponse>(responseBody)
+                val newIdToken = tokenResponse.id_token ?: return null
+                saveTokens(newIdToken, tokenResponse.refresh_token)
+                newIdToken
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun saveTokens(idToken: String, refreshToken: String?) {
+        try {
+            if (!configDir.exists()) configDir.mkdirs()
+            val props = Properties()
+            if (authFile.exists()) {
+                authFile.inputStream().use { props.load(it) }
+            }
+            props.setProperty("id_token", idToken)
+            if (refreshToken != null) {
+                props.setProperty("refresh_token", refreshToken)
+            }
+            authFile.outputStream().use { props.store(it, "LiveCast Auth") }
+        } catch (e: Exception) {
+            // Handle error silently
+        }
+    }
+
+    private fun saveUser(user: User, idToken: String, refreshToken: String? = null) {
         try {
             if (!configDir.exists()) configDir.mkdirs()
             val props = Properties().apply {
@@ -323,6 +401,7 @@ class DesktopAuthService : AuthService {
                 user.displayName?.let { setProperty("display_name", it) }
                 setProperty("is_anonymous", user.isAnonymous.toString())
                 setProperty("id_token", idToken)
+                refreshToken?.let { setProperty("refresh_token", it) }
             }
             authFile.outputStream().use { props.store(it, "LiveCast Auth") }
         } catch (e: Exception) {
@@ -339,6 +418,17 @@ class DesktopAuthService : AuthService {
             // Handle error silently
         }
     }
+
+    @Serializable
+    private data class SecureTokenResponse(
+        val access_token: String? = null,
+        val expires_in: String? = null,
+        val token_type: String? = null,
+        val refresh_token: String? = null,
+        val id_token: String? = null,
+        val user_id: String? = null,
+        val project_id: String? = null
+    )
 
     @Serializable
     private data class FirebaseAuthResponse(

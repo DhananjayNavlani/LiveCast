@@ -45,4 +45,6 @@ class WasmAuthService : AuthService {
         println("[WasmAuth] sendPasswordResetEmail called - not implemented for Wasm")
         return AuthResult.Error("Password reset is not yet supported on web platform")
     }
+
+    override suspend fun getIdToken(forceRefresh: Boolean): String? = null
 }
