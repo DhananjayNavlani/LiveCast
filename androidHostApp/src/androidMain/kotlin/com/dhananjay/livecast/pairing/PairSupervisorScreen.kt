@@ -137,6 +137,13 @@ fun PairSupervisorScreen(
                 }
             } else if (uiState.busy) {
                 CircularProgressIndicator()
+            } else {
+                Button(
+                    onClick = { viewModel.generateCode() },
+                    enabled = !uiState.busy
+                ) {
+                    Text("New code")
+                }
             }
 
             if (uiState.error != null) {

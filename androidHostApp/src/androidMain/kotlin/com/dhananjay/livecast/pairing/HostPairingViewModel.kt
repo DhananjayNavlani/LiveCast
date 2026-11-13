@@ -61,6 +61,18 @@ class HostPairingViewModel(
         deviceIdProvider = { auth.currentUser?.uid }
     )
 
+    constructor(
+        repo: HostPairingRepository,
+        auth: FirebaseAuth,
+        deviceProvider: (deviceId: String) -> HostDevice
+    ) : this(
+        repo = repo,
+        auth = auth as FirebaseAuth?,
+        clock = { System.currentTimeMillis() },
+        deviceIdProvider = { auth.currentUser?.uid },
+        deviceProvider = deviceProvider
+    )
+
     private val _uiState = MutableStateFlow(HostPairingUiState())
     val uiState: StateFlow<HostPairingUiState> = _uiState.asStateFlow()
 
@@ -94,9 +106,16 @@ class HostPairingViewModel(
         }
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, error = null) }
-            runCatching {
-                val device = deviceProvider(deviceId)
-                repo.upsertDevice(device)
+            val device = deviceProvider(deviceId)
+            val upsertResult = repo.upsertDevice(device)
+            if (upsertResult.isFailure) {
+                _uiState.update {
+                    it.copy(
+                        busy = false,
+                        error = upsertResult.exceptionOrNull()?.message ?: "Failed to upsert device"
+                    )
+                }
+                return@launch
             }
             repo.createCode(deviceId).fold(
                 onSuccess = { newCode ->
@@ -129,7 +148,14 @@ class HostPairingViewModel(
             _uiState.update { it.copy(busy = true, error = null) }
             repo.approve(request).fold(
                 onSuccess = {
-                    _uiState.update { it.copy(busy = false) }
+                    _uiState.update {
+                        it.copy(
+                            busy = false,
+                            code = null,
+                            remainingMs = 0L,
+                            requests = emptyList()
+                        )
+                    }
                 },
                 onFailure = { err ->
                     _uiState.update {

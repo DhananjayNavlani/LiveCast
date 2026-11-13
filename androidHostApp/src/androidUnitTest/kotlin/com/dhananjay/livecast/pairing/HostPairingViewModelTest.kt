@@ -5,6 +5,7 @@ import com.dhananjay.livecast.protocol.PairingCode
 import com.dhananjay.livecast.protocol.PairingRequest
 import com.dhananjay.livecast.protocol.PairingStatus
 import com.dhananjay.livecast.protocol.Supervisor
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -39,12 +40,15 @@ class HostPairingViewModelTest {
         val approvedRequests = mutableListOf<PairingRequest>()
         val deniedRequests = mutableListOf<PairingRequest>()
         var nextCode: PairingCode? = null
+        var upsertDeviceResult: Result<Unit> = Result.success(Unit)
+        var createCodeCalls = 0
         val pendingRequestsFlow = MutableStateFlow<List<PairingRequest>>(emptyList())
         val supervisorsFlow = MutableStateFlow<List<Supervisor>>(emptyList())
 
-        override suspend fun upsertDevice(device: HostDevice): Result<Unit> = Result.success(Unit)
+        override suspend fun upsertDevice(device: HostDevice): Result<Unit> = upsertDeviceResult
 
         override suspend fun createCode(deviceId: String): Result<PairingCode> {
+            createCodeCalls++
             val code = nextCode ?: PairingCode(
                 code = "123456",
                 deviceId = deviceId,
@@ -205,5 +209,82 @@ class HostPairingViewModelTest {
         assertEquals<PairingCode?>(code, viewModel.uiState.value.code)
         // remainingMs = expiresAt - clock() = 7000L - 2000L = 5000L
         assertEquals(5000L, viewModel.uiState.value.remainingMs)
+    }
+
+    @Test
+    fun approveConsumesCode() = runTest {
+        val fakeRepo = FakeHostPairingRepository()
+        val code = PairingCode(
+            code = "123456",
+            deviceId = "H",
+            hostUid = "H",
+            createdAtEpochMs = 1000L,
+            expiresAtEpochMs = 7000L,
+        )
+        fakeRepo.nextCode = code
+
+        val viewModel = HostPairingViewModel(
+            repo = fakeRepo,
+            auth = null,
+            clock = { 2000L },
+            deviceIdProvider = { "H" },
+        )
+
+        viewModel.generateCode()
+        advanceUntilIdle()
+        assertEquals<PairingCode?>(code, viewModel.uiState.value.code)
+
+        val req = PairingRequest(
+            id = "r1",
+            code = "123456",
+            deviceId = "H",
+            clientUid = "P",
+            clientName = "Parent",
+            clientEmail = "parent@test.com",
+            status = PairingStatus.PENDING,
+            createdAtEpochMs = 1500L,
+        )
+
+        viewModel.approve(req)
+        advanceUntilIdle()
+
+        assertEquals(listOf(req), fakeRepo.approvedRequests)
+        assertEquals<PairingCode?>(null, viewModel.uiState.value.code)
+        assertTrue(viewModel.uiState.value.requests.isEmpty())
+        assertEquals(0L, viewModel.uiState.value.remainingMs)
+    }
+
+    @Test
+    fun generateCodeStopsWhenDeviceUpsertFails() = runTest {
+        val fakeRepo = FakeHostPairingRepository()
+        fakeRepo.upsertDeviceResult = Result.failure(Exception("Upsert failed"))
+
+        val viewModel = HostPairingViewModel(
+            repo = fakeRepo,
+            auth = null,
+            clock = { 2000L },
+            deviceIdProvider = { "H" },
+        )
+
+        viewModel.generateCode()
+        advanceUntilIdle()
+
+        assertEquals(0, fakeRepo.createCodeCalls)
+        assertEquals("Upsert failed", viewModel.uiState.value.error)
+        assertEquals(false, viewModel.uiState.value.busy)
+        assertEquals<PairingCode?>(null, viewModel.uiState.value.code)
+    }
+
+    @Test
+    fun createCodeCollisionDetection() {
+        val collisionEx = FirebaseFirestoreException("doc exists", FirebaseFirestoreException.Code.ALREADY_EXISTS)
+        val wrappedCollision = RuntimeException("transaction failed", collisionEx)
+        val permissionDenied = FirebaseFirestoreException("permission denied", FirebaseFirestoreException.Code.PERMISSION_DENIED)
+        val otherEx = RuntimeException("network error")
+
+        assertTrue(isAlreadyExistsException(collisionEx))
+        assertTrue(isAlreadyExistsException(wrappedCollision))
+        kotlin.test.assertFalse(isAlreadyExistsException(permissionDenied))
+        kotlin.test.assertFalse(isAlreadyExistsException(otherEx))
     }
 }

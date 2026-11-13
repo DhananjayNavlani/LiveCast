@@ -1,5 +1,7 @@
 package com.dhananjay.livecast.di
 
+import android.os.Build
+import android.provider.Settings
 import androidx.work.WorkManager
 import com.dhananjay.livecast.MainViewModel
 import com.dhananjay.livecast.analytics.Analytics
@@ -13,6 +15,7 @@ import com.dhananjay.livecast.cast.utils.NotificationHelper
 import com.dhananjay.livecast.pairing.FirestoreHostPairingRepository
 import com.dhananjay.livecast.pairing.HostPairingRepository
 import com.dhananjay.livecast.pairing.HostPairingViewModel
+import com.dhananjay.livecast.protocol.HostDevice
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
@@ -22,6 +25,7 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestore
+import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.dsl.worker
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.factoryOf
@@ -48,8 +52,23 @@ val appModule = module {
     singleOf(::PermissionManager)
     worker { DeviceOnlineWorker(get(),get(),get()) }
     viewModel { MainViewModel(get(),get(),get()) }
+    single<(String) -> HostDevice> {
+        val context = androidContext()
+        val provider: (String) -> HostDevice = { deviceId ->
+            val rawName = runCatching {
+                Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)
+            }.getOrNull()
+            val displayName = if (!rawName.isNullOrBlank()) rawName else Build.MODEL
+            HostDevice(
+                id = deviceId,
+                displayName = displayName,
+                model = Build.MODEL
+            )
+        }
+        provider
+    }
     single<HostPairingRepository> { FirestoreHostPairingRepository(get()) }
-    viewModel { HostPairingViewModel(get(), get()) }
+    viewModel { HostPairingViewModel(get(), get(), deviceProvider = get()) }
     single { WorkManager.getInstance(get()) }
 }
 

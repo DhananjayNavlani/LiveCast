@@ -85,7 +85,11 @@ class FirestoreHostPairingRepository(
                     expiresAtEpochMs = expiresAtTs.toDate().time,
                 )
             } catch (e: Exception) {
-                lastError = e
+                if (isAlreadyExistsException(e)) {
+                    lastError = e
+                } else {
+                    throw e
+                }
             }
         }
         throw lastError ?: IllegalStateException("Exceeded maximum retries generating pairing code")
@@ -104,9 +108,7 @@ class FirestoreHostPairingRepository(
             if (snapshot != null) {
                 val requests = snapshot.documents.mapNotNull { doc ->
                     val rawData = doc.data ?: return@mapNotNull null
-                    val converted = rawData.mapValues { (_, value) ->
-                        if (value is Timestamp) value.toDate().time else value
-                    }
+                    val converted = convertTimestamps(rawData)
                     pairingRequestFrom(doc.id, converted)
                 }
                 trySend(requests)
@@ -172,9 +174,7 @@ class FirestoreHostPairingRepository(
             if (snapshot != null) {
                 val supervisors = snapshot.documents.mapNotNull { doc ->
                     val rawData = doc.data ?: return@mapNotNull null
-                    val converted = rawData.mapValues { (_, value) ->
-                        if (value is Timestamp) value.toDate().time else value
-                    }
+                    val converted = convertTimestamps(rawData)
                     supervisorFrom(doc.id, converted)
                 }
                 trySend(supervisors)
@@ -182,4 +182,23 @@ class FirestoreHostPairingRepository(
         }
         awaitClose { registration.remove() }
     }
+
+    private fun convertTimestamps(rawData: Map<String, Any>): Map<String, Any?> {
+        val result = mutableMapOf<String, Any?>()
+        for ((key, value) in rawData) {
+            result[key] = if (value is Timestamp) value.toDate().time else value
+        }
+        return result
+    }
+}
+
+internal fun isAlreadyExistsException(e: Throwable): Boolean {
+    var current: Throwable? = e
+    while (current != null) {
+        if (current is FirebaseFirestoreException && current.code == FirebaseFirestoreException.Code.ALREADY_EXISTS) {
+            return true
+        }
+        current = current.cause
+    }
+    return false
 }
