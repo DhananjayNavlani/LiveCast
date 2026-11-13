@@ -33,6 +33,14 @@ LiveCast is a **child-monitoring product only** (decided 2026-11-13; the "own/ma
 - Gates that stay green: `:androidHostApp:assembleDebug :androidHostApp:compileKotlinDesktop :androidHostApp:compileKotlinIosSimulatorArm64 :androidClientApp:assembleDebug :desktopApp:compileKotlin :client:compileKotlinIosSimulatorArm64`.
 - Deploying rules or indexes to the live project `livecast-b73ad` is outward-facing: the user confirms each deploy.
 
+## Engineering principles (user requirement, 2026-11-14)
+All code follows **SOLID** so features are plug-and-play and extensible:
+- one responsibility per class;
+- consumers depend on narrow interfaces shaped for them;
+- concrete SDK and transport types (`FirebaseAuth`, `FirebaseFirestore`, `FirestoreGrpcClient`) appear only in platform implementation classes and Koin modules;
+- each platform's implementations are bound in its own Koin module (`expect val …Module`), so a backend swaps without caller changes;
+- pure logic (validation, field building, mapping, listen/reconnect state machines) exists once.
+
 ## Approaches considered
 | Approach | Verdict |
 |---|---|
