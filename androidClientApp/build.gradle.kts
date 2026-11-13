@@ -54,6 +54,7 @@ android {
 }
 
 dependencies {
+    implementation(projects.client)
     implementation(projects.core)
     implementation(projects.protocol)
     implementation(projects.transport)
