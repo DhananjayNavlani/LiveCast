@@ -38,6 +38,15 @@ internal sealed interface StreamCloseReason {
     data class Error(val throwable: Throwable) : StreamCloseReason
 }
 
+internal fun mapStatusException(e: StatusRuntimeException, path: String? = null): Throwable {
+    return if (e.status.code == Status.Code.PERMISSION_DENIED) {
+        FirestorePermissionDeniedException(path, e)
+    } else {
+        e
+    }
+}
+
+
 internal sealed interface ReconnectAction {
     data class RetryNow(val forceRefresh: Boolean) : ReconnectAction
     data class RetryAfter(val delayMs: Long, val nextBackoffMs: Long) : ReconnectAction
@@ -125,7 +134,7 @@ class FirestoreGrpcClient(
             if (e.status.code == Status.Code.NOT_FOUND) {
                 null
             } else {
-                throw e
+                throw mapStatusException(e, path)
             }
         }
     }
@@ -155,7 +164,11 @@ class FirestoreGrpcClient(
             .setDocument(docBuilder.build())
             .build()
 
-        val resp = withContext(Dispatchers.IO) { stub.createDocument(req) }
+        val resp = try {
+            withContext(Dispatchers.IO) { stub.createDocument(req) }
+        } catch (e: StatusRuntimeException) {
+            throw mapStatusException(e, collectionPath)
+        }
         return resp.name.substringAfterLast('/')
     }
 
@@ -214,7 +227,14 @@ class FirestoreGrpcClient(
                     .firstOrNull { it.mustNotExist }?.path ?: ""
                 throw FirestoreAlreadyExistsException(conflictPath, e)
             } else {
-                throw e
+                val primaryPath = writes.firstOrNull()?.let {
+                    when (it) {
+                        is FirestoreWrite.Set -> it.path
+                        is FirestoreWrite.Update -> it.path
+                        is FirestoreWrite.Delete -> it.path
+                    }
+                }
+                throw mapStatusException(e, primaryPath)
             }
         }
     }
@@ -356,10 +376,13 @@ class FirestoreGrpcClient(
                                     if (status.code == Status.Code.UNAUTHENTICATED) {
                                         streamClosed.complete(StreamCloseReason.Unauthenticated)
                                     } else {
-                                        streamClosed.complete(StreamCloseReason.Error(status.asRuntimeException()))
+                                        val runtimeException = status.asRuntimeException()
+                                        val mapped = mapStatusException(runtimeException, null)
+                                        streamClosed.complete(StreamCloseReason.Error(mapped))
                                     }
                                     return
                                 }
+
                                 TargetChange.TargetChangeType.RESET -> {
                                     reducer.onReset()
                                     emitSnapshot()
@@ -401,9 +424,13 @@ class FirestoreGrpcClient(
                     when (status.code) {
                         Status.Code.UNAUTHENTICATED -> streamClosed.complete(StreamCloseReason.Unauthenticated)
                         Status.Code.UNAVAILABLE -> streamClosed.complete(StreamCloseReason.Unavailable)
-                        else -> streamClosed.complete(StreamCloseReason.Error(t))
+                        else -> {
+                            val mapped = if (t is StatusRuntimeException) mapStatusException(t, null) else t
+                            streamClosed.complete(StreamCloseReason.Error(mapped))
+                        }
                     }
                 }
+
 
                 override fun onCompleted() {
                     streamClosed.complete(StreamCloseReason.Completed)
@@ -447,8 +474,12 @@ class FirestoreGrpcClient(
                 val reason = when (status.code) {
                     Status.Code.UNAUTHENTICATED -> StreamCloseReason.Unauthenticated
                     Status.Code.UNAVAILABLE -> StreamCloseReason.Unavailable
-                    else -> StreamCloseReason.Error(e)
+                    else -> {
+                        val mapped = if (e is StatusRuntimeException) mapStatusException(e, null) else e
+                        StreamCloseReason.Error(mapped)
+                    }
                 }
+
                 when (val action = nextReconnectAction(reason, consecutiveUnauth, backoffMs)) {
                     is ReconnectAction.RetryNow -> {
                         forceRefreshNext = action.forceRefresh

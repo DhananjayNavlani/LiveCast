@@ -16,6 +16,7 @@ import com.dhananjay.livecast.protocol.hostDeviceFrom
 import com.dhananjay.livecast.protocol.normalizeTimestamps
 import com.dhananjay.livecast.protocol.pairingCodeFrom
 import com.dhananjay.livecast.protocol.pairingRequestFrom
+import com.dhananjay.livecast.client.firestorePlatformModule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -119,17 +120,7 @@ private const val MISSING_CONFIG_MSG =
     "Missing FIREBASE_PROJECT_ID environment variable or firebase_project_id in ~/.livecast/config.properties"
 
 actual val pairingPlatformModule: Module = module {
-    single<FirestoreConfigSource> {
-        EnvPropertiesFirestoreConfigSource(File(System.getProperty("user.home"), ".livecast"))
-    }
-    single<DocumentStore> {
-        val config = checkNotNull(get<FirestoreConfigSource>().load())
-        val idTokenProvider = get<IdTokenProvider>()
-        FirestoreGrpcClient(
-            config = config,
-            tokenProvider = { forceRefresh -> idTokenProvider.getIdToken(forceRefresh) }
-        )
-    } onClose { (it as? AutoCloseable)?.close() }
+    includes(firestorePlatformModule)
 
     single<PairingRequestRepository> {
         get<FirestoreConfigSource>().load()?.let {

@@ -34,3 +34,9 @@ class FirestoreAlreadyExistsException(
     val path: String,
     cause: Throwable? = null
 ) : Exception("Document already exists at path: $path", cause)
+
+class FirestorePermissionDeniedException(
+    val path: String?,
+    cause: Throwable? = null
+) : Exception("Permission denied${path?.let { ": $it" } ?: ""}", cause)
+

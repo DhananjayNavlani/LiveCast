@@ -9,6 +9,7 @@ import com.dhananjay.livecast.protocol.hostDeviceFrom
 import com.dhananjay.livecast.protocol.normalizeTimestamps
 import com.dhananjay.livecast.protocol.pairingCodeFrom
 import com.dhananjay.livecast.protocol.pairingRequestFrom
+import com.dhananjay.livecast.client.firestorePlatformModule
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
@@ -135,7 +136,7 @@ class FirestoreSdkSupervisedDeviceRepository(
 }
 
 actual val pairingPlatformModule: Module = module {
-    single { FirebaseFirestore.getInstance() }
+    includes(firestorePlatformModule)
     single<PairingRequestRepository> { FirestoreSdkPairingRequestRepository(get(), get()) }
     single<SupervisedDeviceRepository> { FirestoreSdkSupervisedDeviceRepository(get(), get()) }
 }
