@@ -35,3 +35,5 @@ dependencyResolutionManagement {
 
 include(":composeApp")
 include(":protocol")
+include(":core")
+include(":host-capability")
