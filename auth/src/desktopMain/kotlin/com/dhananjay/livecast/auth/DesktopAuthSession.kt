@@ -43,7 +43,8 @@ class PropertiesAuthSessionStore(
                 id = userId,
                 email = props.getProperty("email"),
                 displayName = props.getProperty("display_name"),
-                isAnonymous = props.getProperty("is_anonymous")?.toBoolean() ?: false
+                isAnonymous = props.getProperty("is_anonymous")?.toBoolean() ?: false,
+                emailVerified = jwtEmailVerified(idToken)
             )
             val refreshToken = props.getProperty("refresh_token")
             StoredSession(user = user, idToken = idToken, refreshToken = refreshToken)

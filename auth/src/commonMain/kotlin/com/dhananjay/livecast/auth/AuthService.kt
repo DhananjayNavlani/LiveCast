@@ -28,7 +28,8 @@ data class User(
     val email: String?,
     val displayName: String?,
     val photoUrl: String? = null,
-    val isAnonymous: Boolean = false
+    val isAnonymous: Boolean = false,
+    val emailVerified: Boolean = false
 )
 
 /**
@@ -55,10 +56,26 @@ interface SessionProvider : IdTokenProvider {
 }
 
 /**
+ * Interface for email verification operations.
+ */
+interface EmailVerifier {
+    /**
+     * Sends a verification email to the current user's email address.
+     */
+    suspend fun sendVerificationEmail(): AuthResult
+
+    /**
+     * Reloads the account AND force-refreshes the ID token (rules read the token claim),
+     * re-emits authState with the updated user, returns emailVerified.
+     */
+    suspend fun refreshEmailVerification(): Result<Boolean>
+}
+
+/**
  * Cross-platform authentication service interface.
  * Platform-specific implementations will handle actual authentication.
  */
-interface AuthService : SessionProvider {
+interface AuthService : SessionProvider, EmailVerifier {
     /**
      * Check if user is currently logged in
      */

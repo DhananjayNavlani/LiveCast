@@ -10,7 +10,10 @@ import org.koin.dsl.module
  */
 val authModule = module {
     // AuthService is provided by platform-specific factory
-    single<AuthService> { createAuthService() } bind SessionProvider::class bind IdTokenProvider::class
+    val auth = single<AuthService> { createAuthService() }
+    auth bind SessionProvider::class
+    auth bind IdTokenProvider::class
+    auth bind EmailVerifier::class
 
     // LoginViewModel uses the AuthService
     factoryOf(::LoginViewModel)

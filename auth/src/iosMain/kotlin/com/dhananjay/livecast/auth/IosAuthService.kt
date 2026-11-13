@@ -40,4 +40,12 @@ class IosAuthService : AuthService {
     }
 
     override suspend fun getIdToken(forceRefresh: Boolean): String? = null
+
+    override suspend fun sendVerificationEmail(): AuthResult {
+        return AuthResult.Error("Email verification is not available on this platform yet")
+    }
+
+    override suspend fun refreshEmailVerification(): Result<Boolean> {
+        return Result.failure(UnsupportedOperationException("Email verification is not available on this platform yet"))
+    }
 }

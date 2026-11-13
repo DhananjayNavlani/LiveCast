@@ -40,6 +40,35 @@ class DesktopTokensTest {
     }
 
     @Test
+    fun emailVerifiedClaimTrue() {
+        val header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        val payload = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"email_verified":true}""".toByteArray(Charsets.UTF_8))
+        val token = "$header.$payload.signature"
+        assertTrue(jwtEmailVerified(token))
+    }
+
+    @Test
+    fun emailVerifiedClaimMissing() {
+        val header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        val payload = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"sub":"123"}""".toByteArray(Charsets.UTF_8))
+        val token = "$header.$payload.signature"
+        assertFalse(jwtEmailVerified(token))
+    }
+
+    @Test
+    fun emailVerifiedMalformed() {
+        assertFalse(jwtEmailVerified("not-a-jwt"))
+        assertFalse(jwtEmailVerified("header.payload"))
+        assertFalse(jwtEmailVerified("header.invalid_base64!@#.signature"))
+        val header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        val payload = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"email_verified":"not-a-bool"}""".toByteArray(Charsets.UTF_8))
+        assertFalse(jwtEmailVerified("$header.$payload.signature"))
+    }
+
+    @Test
     fun desktopAuthServiceReturnsStoredTokenWhenValid() = kotlinx.coroutines.test.runTest {
         val tempDir = java.nio.file.Files.createTempDirectory("livecast-test").toFile()
         try {

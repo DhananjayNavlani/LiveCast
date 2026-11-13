@@ -106,6 +106,31 @@ class AndroidFirebaseAuthService(
         }
     }
 
+    override suspend fun sendVerificationEmail(): AuthResult {
+        return try {
+            val user = firebaseAuth.currentUser
+                ?: return AuthResult.Error("Not signed in")
+            user.sendEmailVerification().await()
+            AuthResult.Success(user.toUser())
+        } catch (e: Exception) {
+            AuthResult.Error(e.message ?: "Failed to send verification email", e)
+        }
+    }
+
+    override suspend fun refreshEmailVerification(): Result<Boolean> {
+        return try {
+            val user = firebaseAuth.currentUser
+                ?: return Result.failure(IllegalStateException("Not signed in"))
+            user.reload().await()
+            user.getIdToken(true).await()
+            val updatedUser = user.toUser()
+            _authState.value = AuthState.Authenticated(updatedUser)
+            Result.success(updatedUser.emailVerified)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /**
      * Creates an Intent to launch Firebase Auth UI for sign in.
      * Supports Email, Google, and Anonymous sign-in providers.
@@ -142,7 +167,8 @@ class AndroidFirebaseAuthService(
         email = email,
         displayName = displayName,
         photoUrl = photoUrl?.toString(),
-        isAnonymous = isAnonymous
+        isAnonymous = isAnonymous,
+        emailVerified = isEmailVerified
     )
 }
 

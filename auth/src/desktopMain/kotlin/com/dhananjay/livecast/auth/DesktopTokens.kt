@@ -1,12 +1,14 @@
 package com.dhananjay.livecast.auth
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import java.util.Base64
 
-internal fun jwtExpiryEpochSeconds(idToken: String): Long? {
+private fun jwtPayload(idToken: String): JsonObject? {
     val parts = idToken.split('.')
     if (parts.size != 3) return null
 
@@ -24,13 +26,27 @@ internal fun jwtExpiryEpochSeconds(idToken: String): Long? {
         return null
     }
 
-    val jsonObject = try {
+    return try {
         Json.parseToJsonElement(jsonString).jsonObject
     } catch (e: Exception) {
-        return null
+        null
     }
+}
 
-    return jsonObject["exp"]?.jsonPrimitive?.longOrNull
+internal fun jwtExpiryEpochSeconds(idToken: String): Long? {
+    return try {
+        jwtPayload(idToken)?.get("exp")?.jsonPrimitive?.longOrNull
+    } catch (e: Exception) {
+        null
+    }
+}
+
+internal fun jwtEmailVerified(idToken: String): Boolean {
+    return try {
+        jwtPayload(idToken)?.get("email_verified")?.jsonPrimitive?.booleanOrNull == true
+    } catch (e: Exception) {
+        false
+    }
 }
 
 internal fun needsRefresh(idToken: String, nowEpochSeconds: Long, skewSeconds: Long = 300): Boolean {

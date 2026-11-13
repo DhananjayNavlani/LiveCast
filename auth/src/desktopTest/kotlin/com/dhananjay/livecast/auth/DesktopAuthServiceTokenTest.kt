@@ -4,7 +4,9 @@ import kotlinx.coroutines.test.runTest
 import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class DesktopAuthServiceTokenTest {
 
@@ -45,10 +47,30 @@ class DesktopAuthServiceTokenTest {
         }
     }
 
-    private fun makeJwt(expEpochSeconds: Long): String {
+    private class FakeVerificationEmailSender(
+        var result: Result<Unit> = Result.success(Unit)
+    ) : VerificationEmailSender {
+        var sendCalls = 0
+        var lastIdToken: String? = null
+
+        override suspend fun send(idToken: String): Result<Unit> {
+            sendCalls++
+            lastIdToken = idToken
+            return result
+        }
+    }
+
+    private fun makeJwt(expEpochSeconds: Long, emailVerified: Boolean? = null): String {
         val header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        val body = buildString {
+            append("""{"exp":$expEpochSeconds""")
+            if (emailVerified != null) {
+                append(""","email_verified":$emailVerified""")
+            }
+            append("}")
+        }
         val payload = Base64.getUrlEncoder().withoutPadding()
-            .encodeToString("""{"exp":$expEpochSeconds}""".toByteArray(Charsets.UTF_8))
+            .encodeToString(body.toByteArray(Charsets.UTF_8))
         return "$header.$payload.signature"
     }
 
@@ -128,5 +150,95 @@ class DesktopAuthServiceTokenTest {
         assertNull(idToken)
         assertEquals(0, refresher.refreshCalls)
         assertEquals(0, store.updateCalls)
+    }
+
+    @Test
+    fun refreshEmailVerificationForcesTokenRefresh() = runTest {
+        val initialToken = makeJwt(2000L, emailVerified = false)
+        val store = FakeAuthSessionStore(StoredSession(testUser.copy(emailVerified = false), initialToken, "rt-123"))
+        val refreshedToken = makeJwt(3000L, emailVerified = true)
+        val refresher = FakeTokenRefresher(Pair(refreshedToken, "new-rt"))
+
+        val authService = DesktopAuthService(
+            store = store,
+            refresher = refresher,
+            clockEpochSeconds = { 1000L } // not near expiry (2000 - 300 = 1700 > 1000)
+        )
+
+        val result = authService.refreshEmailVerification()
+        assertTrue(result.isSuccess)
+        assertEquals(true, result.getOrNull())
+        assertEquals(1, refresher.refreshCalls)
+        val user = (authService.authState.value as AuthState.Authenticated).user
+        assertTrue(user.emailVerified)
+        assertTrue(authService.currentUser!!.emailVerified)
+    }
+
+    @Test
+    fun refreshEmailVerificationSignedOut() = runTest {
+        val store = FakeAuthSessionStore(session = null)
+        val refresher = FakeTokenRefresher(Pair("token", "rt"))
+
+        val authService = DesktopAuthService(
+            store = store,
+            refresher = refresher
+        )
+
+        val result = authService.refreshEmailVerification()
+        assertTrue(result.isFailure)
+        assertEquals(0, refresher.refreshCalls)
+    }
+
+    @Test
+    fun sendVerificationEmailUsesCurrentToken() = runTest {
+        val token = makeJwt(2000L)
+        val store = FakeAuthSessionStore(StoredSession(testUser, token, "rt-123"))
+        val refresher = FakeTokenRefresher()
+        val sender = FakeVerificationEmailSender(result = Result.success(Unit))
+
+        val authService = DesktopAuthService(
+            store = store,
+            refresher = refresher,
+            verificationSender = sender,
+            clockEpochSeconds = { 1000L }
+        )
+
+        val result = authService.sendVerificationEmail()
+        assertEquals(1, sender.sendCalls)
+        assertEquals(token, sender.lastIdToken)
+        assertTrue(result is AuthResult.Success)
+    }
+
+    @Test
+    fun sendVerificationEmailSignedOut() = runTest {
+        val store = FakeAuthSessionStore(session = null)
+        val refresher = FakeTokenRefresher()
+        val sender = FakeVerificationEmailSender()
+
+        val authService = DesktopAuthService(
+            store = store,
+            refresher = refresher,
+            verificationSender = sender
+        )
+
+        val result = authService.sendVerificationEmail()
+        assertTrue(result is AuthResult.Error)
+        assertEquals(0, sender.sendCalls)
+    }
+
+    @Test
+    fun loadedSessionCarriesEmailVerified() = runTest {
+        val token = makeJwt(2000L, emailVerified = true)
+        val store = FakeAuthSessionStore(StoredSession(testUser.copy(emailVerified = false), token, "rt-123"))
+
+        val authService = DesktopAuthService(
+            store = store,
+            refresher = FakeTokenRefresher(),
+            clockEpochSeconds = { 1000L }
+        )
+
+        assertEquals(true, authService.currentUser?.emailVerified)
+        val authUser = (authService.authState.value as AuthState.Authenticated).user
+        assertTrue(authUser.emailVerified)
     }
 }

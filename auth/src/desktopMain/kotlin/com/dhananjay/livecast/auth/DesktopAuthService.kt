@@ -21,6 +21,7 @@ class DesktopAuthService(
     private val store: AuthSessionStore,
     private val refresher: TokenRefresher,
     private val apiKeyProvider: () -> String? = { null },
+    private val verificationSender: VerificationEmailSender = RestVerificationEmailSender(apiKeyProvider),
     private val clockEpochSeconds: () -> Long = { System.currentTimeMillis() / 1000L }
 ) : AuthService {
 
@@ -31,13 +32,17 @@ class DesktopAuthService(
         store = PropertiesAuthSessionStore(configDir),
         refresher = SecureTokenRefresher({ loadApiKeyFromConfig(configDir) }),
         apiKeyProvider = { loadApiKeyFromConfig(configDir) },
+        verificationSender = RestVerificationEmailSender({ loadApiKeyFromConfig(configDir) }),
         clockEpochSeconds = clockEpochSeconds
     )
 
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _authState = MutableStateFlow<AuthState>(
-        store.load()?.let { AuthState.Authenticated(it.user) } ?: AuthState.Unauthenticated
+        store.load()?.let { session ->
+            val user = session.user.copy(emailVerified = jwtEmailVerified(session.idToken))
+            AuthState.Authenticated(user)
+        } ?: AuthState.Unauthenticated
     )
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
@@ -81,7 +86,8 @@ class DesktopAuthService(
                         id = response.localId,
                         email = response.email,
                         displayName = response.displayName,
-                        isAnonymous = false
+                        isAnonymous = false,
+                        emailVerified = jwtEmailVerified(response.idToken)
                     )
                     store.save(StoredSession(user, response.idToken, response.refreshToken))
                     _authState.value = AuthState.Authenticated(user)
@@ -139,7 +145,8 @@ class DesktopAuthService(
                         id = response.localId,
                         email = response.email,
                         displayName = response.displayName,
-                        isAnonymous = false
+                        isAnonymous = false,
+                        emailVerified = jwtEmailVerified(response.idToken)
                     )
                     store.save(StoredSession(user, response.idToken, response.refreshToken))
                     _authState.value = AuthState.Authenticated(user)
@@ -289,7 +296,41 @@ class DesktopAuthService(
         val refreshed = refresher.refresh(refreshToken) ?: return null
         val (newIdToken, newRefreshToken) = refreshed
         store.updateTokens(newIdToken, newRefreshToken ?: refreshToken)
+        val current = currentUser
+        if (current != null) {
+            val updatedUser = current.copy(emailVerified = jwtEmailVerified(newIdToken))
+            _authState.value = AuthState.Authenticated(updatedUser)
+        }
         return newIdToken
+    }
+
+    override suspend fun sendVerificationEmail(): AuthResult {
+        val user = currentUser
+        if (user == null || store.load() == null) {
+            return AuthResult.Error("Not signed in")
+        }
+        val idToken = getIdToken(forceRefresh = false)
+            ?: return AuthResult.Error("Failed to obtain ID token")
+
+        val result = verificationSender.send(idToken)
+        return result.fold(
+            onSuccess = { AuthResult.Success(user) },
+            onFailure = { e -> AuthResult.Error(e.message ?: "Failed to send verification email", e) }
+        )
+    }
+
+    override suspend fun refreshEmailVerification(): Result<Boolean> {
+        val session = store.load()
+            ?: return Result.failure(IllegalStateException("Not signed in"))
+
+        val newIdToken = getIdToken(forceRefresh = true)
+            ?: return Result.failure(IllegalStateException("Failed to refresh token"))
+
+        val verified = jwtEmailVerified(newIdToken)
+        val updatedUser = (currentUser ?: session.user).copy(emailVerified = verified)
+        store.save(session.copy(user = updatedUser, idToken = newIdToken))
+        _authState.value = AuthState.Authenticated(updatedUser)
+        return Result.success(verified)
     }
 
     @Serializable
@@ -300,25 +341,6 @@ class DesktopAuthService(
         val expiresIn: String,
         val localId: String,
         val displayName: String? = null
-    )
-
-    @Serializable
-    private data class FirebaseErrorResponse(
-        val error: FirebaseError
-    )
-
-    @Serializable
-    private data class FirebaseError(
-        val code: Int,
-        val message: String,
-        val errors: List<FirebaseErrorDetail>? = null
-    )
-
-    @Serializable
-    private data class FirebaseErrorDetail(
-        val message: String,
-        val domain: String,
-        val reason: String
     )
 
     companion object {
@@ -338,3 +360,22 @@ class DesktopAuthService(
         }
     }
 }
+
+@Serializable
+internal data class FirebaseErrorResponse(
+    val error: FirebaseError
+)
+
+@Serializable
+internal data class FirebaseError(
+    val code: Int,
+    val message: String,
+    val errors: List<FirebaseErrorDetail>? = null
+)
+
+@Serializable
+internal data class FirebaseErrorDetail(
+    val message: String,
+    val domain: String,
+    val reason: String
+)
