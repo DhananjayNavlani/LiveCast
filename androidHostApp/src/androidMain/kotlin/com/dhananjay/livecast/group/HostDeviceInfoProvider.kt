@@ -1,4 +1,4 @@
-package com.dhananjay.livecast.pairing
+package com.dhananjay.livecast.group
 
 import android.content.Context
 import android.os.Build

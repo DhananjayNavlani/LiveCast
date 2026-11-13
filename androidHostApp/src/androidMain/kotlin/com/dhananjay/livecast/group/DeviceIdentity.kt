@@ -1,4 +1,4 @@
-package com.dhananjay.livecast.pairing
+package com.dhananjay.livecast.group
 
 import com.google.firebase.auth.FirebaseAuth
 

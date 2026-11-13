@@ -21,5 +21,5 @@ sealed class Routes {
     data object StageScreen : Routes()
 
     @Serializable
-    data object PairSupervisorScreen : Routes()
+    data object EnrollScreen : Routes()
 }

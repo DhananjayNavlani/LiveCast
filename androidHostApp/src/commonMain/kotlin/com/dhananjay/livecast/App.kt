@@ -92,7 +92,7 @@ fun App() {
                 )
             }
 
-            is Routes.PairSupervisorScreen -> {
+            is Routes.EnrollScreen -> {
                 // Not reached on non-Android platforms
             }
         }

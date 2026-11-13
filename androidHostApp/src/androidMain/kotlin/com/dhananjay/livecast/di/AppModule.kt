@@ -10,21 +10,22 @@ import com.dhananjay.livecast.cast.data.repositories.AuthRepository
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
 import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
 import com.dhananjay.livecast.cast.utils.NotificationHelper
-import com.dhananjay.livecast.pairing.AndroidHostDeviceInfoProvider
-import com.dhananjay.livecast.pairing.DeviceIdentity
-import com.dhananjay.livecast.pairing.DeviceRegistry
-import com.dhananjay.livecast.pairing.FirebaseDeviceIdentity
-import com.dhananjay.livecast.pairing.FirestoreDeviceRegistry
-import com.dhananjay.livecast.pairing.FirestorePairingCodeIssuer
-import com.dhananjay.livecast.pairing.FirestorePairingRequestInbox
-import com.dhananjay.livecast.pairing.FirestoreSupervisorDirectory
-import com.dhananjay.livecast.pairing.HostDeviceInfoProvider
-import com.dhananjay.livecast.pairing.HostPairingViewModel
-import com.dhananjay.livecast.pairing.PairingCodeGenerator
-import com.dhananjay.livecast.pairing.PairingCodeIssuer
-import com.dhananjay.livecast.pairing.PairingRequestInbox
-import com.dhananjay.livecast.pairing.SupervisedByViewModel
-import com.dhananjay.livecast.pairing.SupervisorDirectory
+import com.dhananjay.livecast.group.AndroidHostDeviceInfoProvider
+import com.dhananjay.livecast.group.DeviceIdentity
+import com.dhananjay.livecast.group.DeviceRegistry
+import com.dhananjay.livecast.group.EnrollmentDirectory
+import com.dhananjay.livecast.group.EnrollmentViewModel
+import com.dhananjay.livecast.group.FirebaseDeviceIdentity
+import com.dhananjay.livecast.group.FirestoreDeviceRegistry
+import com.dhananjay.livecast.group.FirestoreEnrollmentDirectory
+import com.dhananjay.livecast.group.FirestoreGroupMembersDirectory
+import com.dhananjay.livecast.group.FirestorePresenceReporter
+import com.dhananjay.livecast.group.GroupMembersDirectory
+import com.dhananjay.livecast.group.HostDeviceInfoProvider
+import com.dhananjay.livecast.group.HostPresenceViewModel
+import com.dhananjay.livecast.group.PresenceHeartbeat
+import com.dhananjay.livecast.group.PresenceReporter
+import com.dhananjay.livecast.group.SupervisedByViewModel
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
@@ -62,15 +63,16 @@ val appModule = module {
     worker { DeviceOnlineWorker(get(),get(),get()) }
     viewModel { MainViewModel(get(),get(),get()) }
 
-    single { PairingCodeGenerator() }
     single<DeviceIdentity> { FirebaseDeviceIdentity(get()) }
     single<HostDeviceInfoProvider> { AndroidHostDeviceInfoProvider(androidContext()) }
     single<DeviceRegistry> { FirestoreDeviceRegistry(get()) }
-    single<PairingCodeIssuer> { FirestorePairingCodeIssuer(get(), get(), System::currentTimeMillis) }
-    single<PairingRequestInbox> { FirestorePairingRequestInbox(get()) }
-    single<SupervisorDirectory> { FirestoreSupervisorDirectory(get()) }
-    viewModel { HostPairingViewModel(get(), get(), get(), get(), get(), get()) }
-    viewModel { SupervisedByViewModel(get(), get()) }
+    single<PresenceReporter> { FirestorePresenceReporter(get()) }
+    single { PresenceHeartbeat(get()) }
+    single<EnrollmentDirectory> { FirestoreEnrollmentDirectory(get()) }
+    single<GroupMembersDirectory> { FirestoreGroupMembersDirectory(get()) }
+    viewModel { HostPresenceViewModel(get(), get()) }
+    viewModel { EnrollmentViewModel(get(), get(), get(), get(), get()) }
+    viewModel { SupervisedByViewModel(get(), get(), get()) }
 
     single { WorkManager.getInstance(get()) }
 }

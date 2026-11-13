@@ -56,7 +56,6 @@ import org.koin.compose.koinInject
 fun StageScreen(
     state: List<LiveCastUser>,
     supervisorNames: List<String> = emptyList(),
-    onPairSupervisor: () -> Unit = {},
     onStart: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -134,13 +133,7 @@ fun StageScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
 
-            Button(
-                onClick = onPairSupervisor
-            ) {
-                Text("Pair a supervisor")
-            }
         }
 
         if (user?.isViewer == true) {

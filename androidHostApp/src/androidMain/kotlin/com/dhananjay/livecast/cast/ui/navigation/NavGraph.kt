@@ -1,4 +1,3 @@
-
 package com.dhananjay.livecast.cast.ui.navigation
 
 import android.content.Intent
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Text
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,8 +25,11 @@ import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.ui.stage.StageScreen
 import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
 import com.dhananjay.livecast.cast.utils.Constants
-import com.dhananjay.livecast.pairing.PairSupervisorScreen
-import com.dhananjay.livecast.pairing.SupervisedByViewModel
+import com.dhananjay.livecast.group.EnrollmentScreen
+import com.dhananjay.livecast.group.EnrollmentUiState
+import com.dhananjay.livecast.group.EnrollmentViewModel
+import com.dhananjay.livecast.group.HostPresenceViewModel
+import com.dhananjay.livecast.group.SupervisedByViewModel
 import com.dhananjay.livecast.ui.components.LiveCastButton
 import com.dhananjay.livecast.ui.components.LiveCastButtonVariant
 import com.dhananjay.livecast.ui.components.VerticalSpacer
@@ -52,7 +55,7 @@ fun LiveCastNavigation(
     val context = LocalContext.current
     NavHost(
         navController = controller,
-        startDestination = if (loginStatus) Routes.StageScreen else Routes.LoginScreen,
+        startDestination = if (loginStatus) Routes.EnrollScreen else Routes.LoginScreen,
         modifier = modifier
     ) {
         composable<Routes.StageScreen> {
@@ -64,14 +67,22 @@ fun LiveCastNavigation(
                     emptyList()
                 )
                 val supervisedByViewModel: SupervisedByViewModel = koinViewModel()
-                val supervisorNames by supervisedByViewModel.supervisorNames.collectAsStateWithLifecycle()
+                val supervisedState by supervisedByViewModel.state.collectAsStateWithLifecycle()
+                koinViewModel<HostPresenceViewModel>()
+
+                LaunchedEffect(supervisedState.enrolled) {
+                    if (supervisedState.enrolled == false) {
+                        controller.navigate(Routes.EnrollScreen) {
+                            popUpTo(Routes.StageScreen) {
+                                inclusive = true
+                            }
+                        }
+                    }
+                }
 
                 StageScreen(
                     state = state,
-                    supervisorNames = supervisorNames,
-                    onPairSupervisor = {
-                        controller.navigate(Routes.PairSupervisorScreen)
-                    },
+                    supervisorNames = supervisedState.supervisorNames,
                     onStart = {
                         context.startActivity(
                             Intent(
@@ -93,12 +104,49 @@ fun LiveCastNavigation(
                 )
             }
         }
-        composable<Routes.PairSupervisorScreen> {
-            PairSupervisorScreen(
-                onBack = { controller.popBackStack() }
+        composable<Routes.EnrollScreen> {
+            val enrollmentViewModel: EnrollmentViewModel = koinViewModel()
+            val state by enrollmentViewModel.state.collectAsStateWithLifecycle()
+
+            LaunchedEffect(state) {
+                if (state is EnrollmentUiState.Enrolled) {
+                    controller.navigate(Routes.StageScreen) {
+                        popUpTo(Routes.EnrollScreen) {
+                            inclusive = true
+                        }
+                    }
+                }
+            }
+
+            EnrollmentScreen(
+                state = state,
+                onSendVerification = enrollmentViewModel::sendVerification,
+                onCheckVerification = enrollmentViewModel::checkVerification,
+                onRetry = enrollmentViewModel::retry,
+                onChooseGroup = enrollmentViewModel::choose,
+                onBack = enrollmentViewModel::back,
+                onConfirm = enrollmentViewModel::confirm,
+                onSignOut = {
+                    onLogout()
+                    controller.navigate(Routes.LoginScreen) {
+                        popUpTo(Routes.EnrollScreen) {
+                            inclusive = true
+                        }
+                    }
+                }
             )
         }
         composable<Routes.LoginScreen> {
+            LaunchedEffect(loginStatus) {
+                if (loginStatus) {
+                    controller.navigate(Routes.EnrollScreen) {
+                        popUpTo(Routes.LoginScreen) {
+                            inclusive = true
+                        }
+                    }
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()

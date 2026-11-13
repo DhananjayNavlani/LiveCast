@@ -1,38 +1,37 @@
-package com.dhananjay.livecast.pairing
+package com.dhananjay.livecast.group
 
 import com.dhananjay.livecast.protocol.FirestorePaths
-import com.dhananjay.livecast.protocol.Supervisor
+import com.dhananjay.livecast.protocol.GroupMember
+import com.dhananjay.livecast.protocol.GroupRules
+import com.dhananjay.livecast.protocol.groupMemberFrom
 import com.dhananjay.livecast.protocol.normalizeTimestamps
-import com.dhananjay.livecast.protocol.supervisorFrom
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
-interface SupervisorDirectory {
-    fun observeSupervisors(deviceId: String): Flow<List<Supervisor>>
+interface GroupMembersDirectory {
+    fun observeSupervisors(groupId: String): Flow<List<GroupMember>>
 }
 
-class FirestoreSupervisorDirectory(
+class FirestoreGroupMembersDirectory(
     private val firestore: FirebaseFirestore
-) : SupervisorDirectory {
+) : GroupMembersDirectory {
 
-    override fun observeSupervisors(deviceId: String): Flow<List<Supervisor>> = callbackFlow {
-        val collectionRef = firestore.collection(FirestorePaths.DEVICES)
-            .document(deviceId)
-            .collection(FirestorePaths.SUPERVISORS)
-
+    override fun observeSupervisors(groupId: String): Flow<List<GroupMember>> = callbackFlow {
+        val collectionRef = firestore.collection(FirestorePaths.members(groupId))
         val registration = collectionRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 close(error)
                 return@addSnapshotListener
             }
             if (snapshot != null) {
-                val supervisors = snapshot.documents.mapNotNull { doc ->
+                val members = snapshot.documents.mapNotNull { doc ->
                     val rawData = doc.data ?: return@mapNotNull null
                     val data = normalizeTimestamps(rawData, firestoreTimestampToMillis)
-                    supervisorFrom(doc.id, data)
+                    groupMemberFrom(groupId, doc.id, data)
                 }
+                val supervisors = GroupRules.supervisorsOf(members)
                 trySend(supervisors)
             }
         }
