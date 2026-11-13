@@ -10,6 +10,7 @@ kotlin {
             implementation(projects.core)
             implementation(projects.protocol)
             implementation(projects.transport)
+            implementation(projects.designsystem)
 
             implementation(compose.runtime)
             implementation(compose.foundation)

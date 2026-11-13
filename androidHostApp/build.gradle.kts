@@ -89,6 +89,7 @@ kotlin {
         }
         
         commonMain.dependencies {
+            implementation(projects.designsystem)
             implementation(projects.auth)
             implementation(projects.protocol)
             implementation(compose.runtime)
