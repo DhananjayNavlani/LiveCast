@@ -25,8 +25,8 @@ import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.ui.stage.StageScreen
 import com.dhananjay.livecast.cast.ui.video.VideoScreenActivity
 import com.dhananjay.livecast.cast.utils.Constants
-import com.dhananjay.livecast.pairing.HostPairingViewModel
 import com.dhananjay.livecast.pairing.PairSupervisorScreen
+import com.dhananjay.livecast.pairing.SupervisedByViewModel
 import com.dhananjay.livecast.ui.components.LiveCastButton
 import com.dhananjay.livecast.ui.components.LiveCastButtonVariant
 import com.dhananjay.livecast.ui.components.VerticalSpacer
@@ -63,12 +63,12 @@ fun LiveCastNavigation(
                 val state by koinInject<RemoteDataSource>().devicesOnline.collectAsStateWithLifecycle(
                     emptyList()
                 )
-                val pairingViewModel: HostPairingViewModel = koinViewModel()
-                val pairingUiState by pairingViewModel.uiState.collectAsStateWithLifecycle()
+                val supervisedByViewModel: SupervisedByViewModel = koinViewModel()
+                val supervisors by supervisedByViewModel.supervisors.collectAsStateWithLifecycle()
 
                 StageScreen(
                     state = state,
-                    supervisors = pairingUiState.supervisors,
+                    supervisors = supervisors,
                     onPairSupervisor = {
                         controller.navigate(Routes.PairSupervisorScreen)
                     },

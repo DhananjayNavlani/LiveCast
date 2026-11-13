@@ -1,13 +1,10 @@
 package com.dhananjay.livecast.pairing
 
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dhananjay.livecast.protocol.HostDevice
 import com.dhananjay.livecast.protocol.PairingCode
 import com.dhananjay.livecast.protocol.PairingRequest
 import com.dhananjay.livecast.protocol.Supervisor
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,42 +33,14 @@ data class HostPairingUiState(
 )
 
 class HostPairingViewModel(
-    private val repo: HostPairingRepository,
-    private val auth: FirebaseAuth? = null,
-    private val clock: () -> Long = System::currentTimeMillis,
-    private val deviceIdProvider: () -> String? = { auth?.currentUser?.uid },
-    private val deviceProvider: (deviceId: String) -> HostDevice = { id ->
-        val model = runCatching { Build.MODEL }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Android"
-        HostDevice(
-            id = id,
-            displayName = model,
-            model = model
-        )
-    }
+    private val identity: DeviceIdentity,
+    private val deviceInfo: HostDeviceInfoProvider,
+    private val registry: DeviceRegistry,
+    private val codes: PairingCodeIssuer,
+    private val inbox: PairingRequestInbox,
+    private val supervisors: SupervisorDirectory,
+    private val clock: () -> Long = System::currentTimeMillis
 ) : ViewModel() {
-
-    constructor(
-        repo: HostPairingRepository,
-        auth: FirebaseAuth,
-        clock: () -> Long = System::currentTimeMillis
-    ) : this(
-        repo = repo,
-        auth = auth as FirebaseAuth?,
-        clock = clock,
-        deviceIdProvider = { auth.currentUser?.uid }
-    )
-
-    constructor(
-        repo: HostPairingRepository,
-        auth: FirebaseAuth,
-        deviceProvider: (deviceId: String) -> HostDevice
-    ) : this(
-        repo = repo,
-        auth = auth as FirebaseAuth?,
-        clock = { System.currentTimeMillis() },
-        deviceIdProvider = { auth.currentUser?.uid },
-        deviceProvider = deviceProvider
-    )
 
     private val _uiState = MutableStateFlow(HostPairingUiState())
     val uiState: StateFlow<HostPairingUiState> = _uiState.asStateFlow()
@@ -79,15 +48,15 @@ class HostPairingViewModel(
     private var rawPendingRequests: List<PairingRequest> = emptyList()
 
     init {
-        val deviceId = deviceIdProvider()
+        val deviceId = identity.deviceId
         if (deviceId != null) {
             viewModelScope.launch {
-                repo.observeSupervisors(deviceId).collect { supervisors ->
-                    _uiState.update { it.copy(supervisors = supervisors) }
+                supervisors.observeSupervisors(deviceId).collect { supervisorsList ->
+                    _uiState.update { it.copy(supervisors = supervisorsList) }
                 }
             }
             viewModelScope.launch {
-                repo.observePendingRequests(deviceId).collect { pending ->
+                inbox.observePendingRequests(deviceId).collect { pending ->
                     rawPendingRequests = pending
                     val currentCode = _uiState.value.code
                     val now = clock()
@@ -100,14 +69,14 @@ class HostPairingViewModel(
     }
 
     fun generateCode() {
-        val deviceId = deviceIdProvider() ?: run {
+        val deviceId = identity.deviceId ?: run {
             _uiState.update { it.copy(error = "Not authenticated") }
             return
         }
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, error = null) }
-            val device = deviceProvider(deviceId)
-            val upsertResult = repo.upsertDevice(device)
+            val device = deviceInfo.current(deviceId)
+            val upsertResult = registry.upsertDevice(device)
             if (upsertResult.isFailure) {
                 _uiState.update {
                     it.copy(
@@ -117,7 +86,7 @@ class HostPairingViewModel(
                 }
                 return@launch
             }
-            repo.createCode(deviceId).fold(
+            codes.createCode(deviceId).fold(
                 onSuccess = { newCode ->
                     val now = clock()
                     val remaining = maxOf(0L, newCode.expiresAtEpochMs - now)
@@ -146,7 +115,7 @@ class HostPairingViewModel(
     fun approve(request: PairingRequest) {
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, error = null) }
-            repo.approve(request).fold(
+            inbox.approve(request).fold(
                 onSuccess = {
                     _uiState.update {
                         it.copy(
@@ -172,7 +141,7 @@ class HostPairingViewModel(
     fun deny(request: PairingRequest) {
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, error = null) }
-            repo.deny(request).fold(
+            inbox.deny(request).fold(
                 onSuccess = {
                     _uiState.update { it.copy(busy = false) }
                 },

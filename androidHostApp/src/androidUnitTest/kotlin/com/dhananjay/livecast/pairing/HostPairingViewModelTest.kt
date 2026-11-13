@@ -19,6 +19,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -36,16 +37,29 @@ class HostPairingViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private class FakeHostPairingRepository : HostPairingRepository {
-        val approvedRequests = mutableListOf<PairingRequest>()
-        val deniedRequests = mutableListOf<PairingRequest>()
-        var nextCode: PairingCode? = null
-        var upsertDeviceResult: Result<Unit> = Result.success(Unit)
-        var createCodeCalls = 0
-        val pendingRequestsFlow = MutableStateFlow<List<PairingRequest>>(emptyList())
-        val supervisorsFlow = MutableStateFlow<List<Supervisor>>(emptyList())
+    private class FakeDeviceIdentity(override var deviceId: String? = "H") : DeviceIdentity
 
-        override suspend fun upsertDevice(device: HostDevice): Result<Unit> = upsertDeviceResult
+    private class FakeHostDeviceInfoProvider : HostDeviceInfoProvider {
+        override fun current(deviceId: String): HostDevice = HostDevice(
+            id = deviceId,
+            displayName = "Android",
+            model = "Android"
+        )
+    }
+
+    private class FakeDeviceRegistry : DeviceRegistry {
+        var upsertDeviceResult: Result<Unit> = Result.success(Unit)
+        val upsertedDevices = mutableListOf<HostDevice>()
+
+        override suspend fun upsertDevice(device: HostDevice): Result<Unit> {
+            upsertedDevices.add(device)
+            return upsertDeviceResult
+        }
+    }
+
+    private class FakePairingCodeIssuer : PairingCodeIssuer {
+        var createCodeCalls = 0
+        var nextCode: PairingCode? = null
 
         override suspend fun createCode(deviceId: String): Result<PairingCode> {
             createCodeCalls++
@@ -58,6 +72,12 @@ class HostPairingViewModelTest {
             )
             return Result.success(code)
         }
+    }
+
+    private class FakePairingRequestInbox : PairingRequestInbox {
+        val approvedRequests = mutableListOf<PairingRequest>()
+        val deniedRequests = mutableListOf<PairingRequest>()
+        val pendingRequestsFlow = MutableStateFlow<List<PairingRequest>>(emptyList())
 
         override fun observePendingRequests(deviceId: String): Flow<List<PairingRequest>> =
             pendingRequestsFlow
@@ -71,6 +91,10 @@ class HostPairingViewModelTest {
             deniedRequests.add(request)
             return Result.success(Unit)
         }
+    }
+
+    private class FakeSupervisorDirectory : SupervisorDirectory {
+        val supervisorsFlow = MutableStateFlow<List<Supervisor>>(emptyList())
 
         override fun observeSupervisors(deviceId: String): Flow<List<Supervisor>> =
             supervisorsFlow
@@ -132,12 +156,21 @@ class HostPairingViewModelTest {
 
     @Test
     fun approveDelegatesToRepo() = runTest {
-        val fakeRepo = FakeHostPairingRepository()
+        val fakeIdentity = FakeDeviceIdentity("H")
+        val fakeDeviceInfo = FakeHostDeviceInfoProvider()
+        val fakeRegistry = FakeDeviceRegistry()
+        val fakeCodes = FakePairingCodeIssuer()
+        val fakeInbox = FakePairingRequestInbox()
+        val fakeSupervisors = FakeSupervisorDirectory()
+
         val viewModel = HostPairingViewModel(
-            repo = fakeRepo,
-            auth = null,
-            clock = { 2000L },
-            deviceIdProvider = { "H" },
+            identity = fakeIdentity,
+            deviceInfo = fakeDeviceInfo,
+            registry = fakeRegistry,
+            codes = fakeCodes,
+            inbox = fakeInbox,
+            supervisors = fakeSupervisors,
+            clock = { 2000L }
         )
 
         val req = PairingRequest(
@@ -154,17 +187,26 @@ class HostPairingViewModelTest {
         viewModel.approve(req)
         advanceUntilIdle()
 
-        assertEquals(listOf(req), fakeRepo.approvedRequests)
+        assertEquals(listOf(req), fakeInbox.approvedRequests)
     }
 
     @Test
     fun denyDelegatesToRepo() = runTest {
-        val fakeRepo = FakeHostPairingRepository()
+        val fakeIdentity = FakeDeviceIdentity("H")
+        val fakeDeviceInfo = FakeHostDeviceInfoProvider()
+        val fakeRegistry = FakeDeviceRegistry()
+        val fakeCodes = FakePairingCodeIssuer()
+        val fakeInbox = FakePairingRequestInbox()
+        val fakeSupervisors = FakeSupervisorDirectory()
+
         val viewModel = HostPairingViewModel(
-            repo = fakeRepo,
-            auth = null,
-            clock = { 2000L },
-            deviceIdProvider = { "H" },
+            identity = fakeIdentity,
+            deviceInfo = fakeDeviceInfo,
+            registry = fakeRegistry,
+            codes = fakeCodes,
+            inbox = fakeInbox,
+            supervisors = fakeSupervisors,
+            clock = { 2000L }
         )
 
         val req = PairingRequest(
@@ -181,12 +223,18 @@ class HostPairingViewModelTest {
         viewModel.deny(req)
         advanceUntilIdle()
 
-        assertEquals(listOf(req), fakeRepo.deniedRequests)
+        assertEquals(listOf(req), fakeInbox.deniedRequests)
     }
 
     @Test
     fun generateCodeExposesCountdown() = runTest {
-        val fakeRepo = FakeHostPairingRepository()
+        val fakeIdentity = FakeDeviceIdentity("H")
+        val fakeDeviceInfo = FakeHostDeviceInfoProvider()
+        val fakeRegistry = FakeDeviceRegistry()
+        val fakeCodes = FakePairingCodeIssuer()
+        val fakeInbox = FakePairingRequestInbox()
+        val fakeSupervisors = FakeSupervisorDirectory()
+
         val code = PairingCode(
             code = "123456",
             deviceId = "H",
@@ -194,13 +242,16 @@ class HostPairingViewModelTest {
             createdAtEpochMs = 1000L,
             expiresAtEpochMs = 7000L,
         )
-        fakeRepo.nextCode = code
+        fakeCodes.nextCode = code
 
         val viewModel = HostPairingViewModel(
-            repo = fakeRepo,
-            auth = null,
-            clock = { 2000L },
-            deviceIdProvider = { "H" },
+            identity = fakeIdentity,
+            deviceInfo = fakeDeviceInfo,
+            registry = fakeRegistry,
+            codes = fakeCodes,
+            inbox = fakeInbox,
+            supervisors = fakeSupervisors,
+            clock = { 2000L }
         )
 
         viewModel.generateCode()
@@ -213,7 +264,13 @@ class HostPairingViewModelTest {
 
     @Test
     fun approveConsumesCode() = runTest {
-        val fakeRepo = FakeHostPairingRepository()
+        val fakeIdentity = FakeDeviceIdentity("H")
+        val fakeDeviceInfo = FakeHostDeviceInfoProvider()
+        val fakeRegistry = FakeDeviceRegistry()
+        val fakeCodes = FakePairingCodeIssuer()
+        val fakeInbox = FakePairingRequestInbox()
+        val fakeSupervisors = FakeSupervisorDirectory()
+
         val code = PairingCode(
             code = "123456",
             deviceId = "H",
@@ -221,13 +278,16 @@ class HostPairingViewModelTest {
             createdAtEpochMs = 1000L,
             expiresAtEpochMs = 7000L,
         )
-        fakeRepo.nextCode = code
+        fakeCodes.nextCode = code
 
         val viewModel = HostPairingViewModel(
-            repo = fakeRepo,
-            auth = null,
-            clock = { 2000L },
-            deviceIdProvider = { "H" },
+            identity = fakeIdentity,
+            deviceInfo = fakeDeviceInfo,
+            registry = fakeRegistry,
+            codes = fakeCodes,
+            inbox = fakeInbox,
+            supervisors = fakeSupervisors,
+            clock = { 2000L }
         )
 
         viewModel.generateCode()
@@ -248,7 +308,7 @@ class HostPairingViewModelTest {
         viewModel.approve(req)
         advanceUntilIdle()
 
-        assertEquals(listOf(req), fakeRepo.approvedRequests)
+        assertEquals(listOf(req), fakeInbox.approvedRequests)
         assertEquals<PairingCode?>(null, viewModel.uiState.value.code)
         assertTrue(viewModel.uiState.value.requests.isEmpty())
         assertEquals(0L, viewModel.uiState.value.remainingMs)
@@ -256,20 +316,28 @@ class HostPairingViewModelTest {
 
     @Test
     fun generateCodeStopsWhenDeviceUpsertFails() = runTest {
-        val fakeRepo = FakeHostPairingRepository()
-        fakeRepo.upsertDeviceResult = Result.failure(Exception("Upsert failed"))
+        val fakeIdentity = FakeDeviceIdentity("H")
+        val fakeDeviceInfo = FakeHostDeviceInfoProvider()
+        val fakeRegistry = FakeDeviceRegistry()
+        fakeRegistry.upsertDeviceResult = Result.failure(Exception("Upsert failed"))
+        val fakeCodes = FakePairingCodeIssuer()
+        val fakeInbox = FakePairingRequestInbox()
+        val fakeSupervisors = FakeSupervisorDirectory()
 
         val viewModel = HostPairingViewModel(
-            repo = fakeRepo,
-            auth = null,
-            clock = { 2000L },
-            deviceIdProvider = { "H" },
+            identity = fakeIdentity,
+            deviceInfo = fakeDeviceInfo,
+            registry = fakeRegistry,
+            codes = fakeCodes,
+            inbox = fakeInbox,
+            supervisors = fakeSupervisors,
+            clock = { 2000L }
         )
 
         viewModel.generateCode()
         advanceUntilIdle()
 
-        assertEquals(0, fakeRepo.createCodeCalls)
+        assertEquals(0, fakeCodes.createCodeCalls)
         assertEquals("Upsert failed", viewModel.uiState.value.error)
         assertEquals(false, viewModel.uiState.value.busy)
         assertEquals<PairingCode?>(null, viewModel.uiState.value.code)
@@ -284,7 +352,7 @@ class HostPairingViewModelTest {
 
         assertTrue(isAlreadyExistsException(collisionEx))
         assertTrue(isAlreadyExistsException(wrappedCollision))
-        kotlin.test.assertFalse(isAlreadyExistsException(permissionDenied))
-        kotlin.test.assertFalse(isAlreadyExistsException(otherEx))
+        assertFalse(isAlreadyExistsException(permissionDenied))
+        assertFalse(isAlreadyExistsException(otherEx))
     }
 }

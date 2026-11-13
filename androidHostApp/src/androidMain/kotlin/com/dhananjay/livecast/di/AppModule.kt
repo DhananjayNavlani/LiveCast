@@ -1,7 +1,5 @@
 package com.dhananjay.livecast.di
 
-import android.os.Build
-import android.provider.Settings
 import androidx.work.WorkManager
 import com.dhananjay.livecast.MainViewModel
 import com.dhananjay.livecast.analytics.Analytics
@@ -12,10 +10,20 @@ import com.dhananjay.livecast.cast.data.repositories.AuthRepository
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
 import com.dhananjay.livecast.cast.data.workers.DeviceOnlineWorker
 import com.dhananjay.livecast.cast.utils.NotificationHelper
-import com.dhananjay.livecast.pairing.FirestoreHostPairingRepository
-import com.dhananjay.livecast.pairing.HostPairingRepository
+import com.dhananjay.livecast.pairing.AndroidHostDeviceInfoProvider
+import com.dhananjay.livecast.pairing.DeviceIdentity
+import com.dhananjay.livecast.pairing.DeviceRegistry
+import com.dhananjay.livecast.pairing.FirebaseDeviceIdentity
+import com.dhananjay.livecast.pairing.FirestoreDeviceRegistry
+import com.dhananjay.livecast.pairing.FirestorePairingCodeIssuer
+import com.dhananjay.livecast.pairing.FirestorePairingRequestInbox
+import com.dhananjay.livecast.pairing.FirestoreSupervisorDirectory
+import com.dhananjay.livecast.pairing.HostDeviceInfoProvider
 import com.dhananjay.livecast.pairing.HostPairingViewModel
-import com.dhananjay.livecast.protocol.HostDevice
+import com.dhananjay.livecast.pairing.PairingCodeIssuer
+import com.dhananjay.livecast.pairing.PairingRequestInbox
+import com.dhananjay.livecast.pairing.SupervisedByViewModel
+import com.dhananjay.livecast.pairing.SupervisorDirectory
 import com.dhananjay.livecast.webrtc.connection.SignalingClient
 import com.dhananjay.livecast.webrtc.peer.StreamPeerConnectionFactory
 import com.dhananjay.livecast.webrtc.session.WebRtcSessionManager
@@ -52,23 +60,15 @@ val appModule = module {
     singleOf(::PermissionManager)
     worker { DeviceOnlineWorker(get(),get(),get()) }
     viewModel { MainViewModel(get(),get(),get()) }
-    single<(String) -> HostDevice> {
-        val context = androidContext()
-        val provider: (String) -> HostDevice = { deviceId ->
-            val rawName = runCatching {
-                Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)
-            }.getOrNull()
-            val displayName = if (!rawName.isNullOrBlank()) rawName else Build.MODEL
-            HostDevice(
-                id = deviceId,
-                displayName = displayName,
-                model = Build.MODEL
-            )
-        }
-        provider
-    }
-    single<HostPairingRepository> { FirestoreHostPairingRepository(get()) }
-    viewModel { HostPairingViewModel(get(), get(), deviceProvider = get()) }
+
+    single<DeviceIdentity> { FirebaseDeviceIdentity(get()) }
+    single<HostDeviceInfoProvider> { AndroidHostDeviceInfoProvider(androidContext()) }
+    single<DeviceRegistry> { FirestoreDeviceRegistry(get()) }
+    single<PairingCodeIssuer> { FirestorePairingCodeIssuer(get()) }
+    single<PairingRequestInbox> { FirestorePairingRequestInbox(get()) }
+    single<SupervisorDirectory> { FirestoreSupervisorDirectory(get()) }
+    viewModel { HostPairingViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { SupervisedByViewModel(get(), get()) }
+
     single { WorkManager.getInstance(get()) }
 }
-
