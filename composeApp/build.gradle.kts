@@ -222,6 +222,23 @@ android {
 compose.desktop {
     application {
         mainClass = "com.dhananjay.livecast.MainKt"
+        val defaultHome = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        }.get().metadata.installationPath.asFile.absolutePath
+        javaHome = if (file("$defaultHome/bin/jpackage").exists()) {
+            defaultHome
+        } else {
+            listOf(JvmVendorSpec.AMAZON, JvmVendorSpec.ADOPTIUM, JvmVendorSpec.ORACLE, JvmVendorSpec.AZUL)
+                .firstNotNullOfOrNull { vendorSpec ->
+                    runCatching {
+                        val path = javaToolchains.launcherFor {
+                            languageVersion.set(JavaLanguageVersion.of(25))
+                            vendor.set(vendorSpec)
+                        }.get().metadata.installationPath.asFile.absolutePath
+                        if (file("$path/bin/jpackage").exists()) path else null
+                    }.getOrNull()
+                } ?: defaultHome
+        }
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
