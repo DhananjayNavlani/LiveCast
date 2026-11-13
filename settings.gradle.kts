@@ -33,7 +33,7 @@ dependencyResolutionManagement {
     }
 }
 
-include(":composeApp")
+include(":androidHostApp")
 include(":protocol")
 include(":core")
 include(":host-capability")
