@@ -6,6 +6,7 @@ import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
 import com.dhananjay.livecast.auth.EmailVerifier
 import com.dhananjay.livecast.auth.SessionProvider
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,11 +30,18 @@ class VerifyEmailViewModel(
     )
     val state: StateFlow<VerifyEmailUiState> = _state.asStateFlow()
 
+    private var currentUid: String? = session.currentUser?.id
+    private var inFlightJob: Job? = null
+
     init {
         viewModelScope.launch {
             session.authState.collect { authState ->
-                if (authState is AuthState.Authenticated) {
-                    _state.update { it.copy(email = authState.user.email) }
+                val user = (authState as? AuthState.Authenticated)?.user
+                val uid = user?.id
+                if (uid != currentUid || authState !is AuthState.Authenticated) {
+                    currentUid = uid
+                    inFlightJob?.cancel()
+                    _state.value = VerifyEmailUiState(email = user?.email)
                 }
             }
         }
@@ -42,7 +50,8 @@ class VerifyEmailViewModel(
     fun send() {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
-        viewModelScope.launch {
+        inFlightJob?.cancel()
+        inFlightJob = viewModelScope.launch {
             val result = verifier.sendVerificationEmail()
             _state.update {
                 when (result) {
@@ -56,7 +65,8 @@ class VerifyEmailViewModel(
     fun check() {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, message = null) }
-        viewModelScope.launch {
+        inFlightJob?.cancel()
+        inFlightJob = viewModelScope.launch {
             val result = verifier.refreshEmailVerification()
             _state.update {
                 result.fold(

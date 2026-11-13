@@ -25,6 +25,8 @@ data class GroupManagementUiState(
     val myEmail: String? = null,
     val busy: Boolean = false,
     val error: String? = null,
+    val groupCreatedCount: Int = 0,
+    val memberAddedCount: Int = 0,
 )
 
 class GroupManagementViewModel(
@@ -38,6 +40,8 @@ class GroupManagementViewModel(
 
     private var membershipsJob: Job? = null
     private var membersJob: Job? = null
+    private var mutationJob: Job? = null
+    private var currentObservedMemberGroupId: String? = null
 
     init {
         viewModelScope.launch {
@@ -48,15 +52,17 @@ class GroupManagementViewModel(
     }
 
     private fun rebind(authState: AuthState) {
+        mutationJob?.cancel()
         membershipsJob?.cancel()
         membersJob?.cancel()
+        currentObservedMemberGroupId = null
 
         val user = (authState as? AuthState.Authenticated)?.user
         val myEmail = user?.email?.let { GroupRules.normalizeEmail(it) }
 
         _state.value = GroupManagementUiState(myEmail = myEmail)
 
-        if (user == null || user.isAnonymous || user.email.isNullOrBlank()) {
+        if (clientGate(user) != ClientGate.READY) {
             return
         }
 
@@ -92,23 +98,40 @@ class GroupManagementViewModel(
         }
 
         if (newSelectedId != null) {
-            observeMembers(newSelectedId)
+            if (newSelectedId != currentObservedMemberGroupId) {
+                currentObservedMemberGroupId = newSelectedId
+                observeMembers(newSelectedId)
+            }
         } else {
+            currentObservedMemberGroupId = null
             membersJob?.cancel()
             _state.update { it.copy(members = emptyList()) }
         }
     }
 
     fun selectGroup(groupId: String) {
-        val membership = _state.value.memberships.firstOrNull { it.group.id == groupId } ?: return
+        _state.value.memberships.firstOrNull { it.group.id == groupId } ?: return
+        selectGroupInternal(groupId)
+    }
+
+    private fun selectGroupInternal(groupId: String) {
+        val membership = _state.value.memberships.firstOrNull { it.group.id == groupId }
+        val canManage = if (membership != null) {
+            membership.myRole == GroupRole.OWNER
+        } else {
+            true // creator is OWNER
+        }
         _state.update {
             it.copy(
                 selectedGroupId = groupId,
-                canManage = membership.myRole == GroupRole.OWNER,
+                canManage = canManage,
                 error = null,
             )
         }
-        observeMembers(groupId)
+        if (groupId != currentObservedMemberGroupId) {
+            currentObservedMemberGroupId = groupId
+            observeMembers(groupId)
+        }
     }
 
     private fun observeMembers(groupId: String) {
@@ -134,18 +157,24 @@ class GroupManagementViewModel(
         }
 
         _state.update { it.copy(busy = true, error = null) }
-        viewModelScope.launch {
+        mutationJob = viewModelScope.launch {
             val result = groups.createGroup(normalizedName)
-            _state.update { current ->
-                result.fold(
-                    onSuccess = { newGroupId ->
-                        current.copy(busy = false, selectedGroupId = newGroupId)
-                    },
-                    onFailure = { e ->
+            result.fold(
+                onSuccess = { newGroupId ->
+                    selectGroupInternal(newGroupId)
+                    _state.update { current ->
+                        current.copy(
+                            busy = false,
+                            groupCreatedCount = current.groupCreatedCount + 1,
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _state.update { current ->
                         current.copy(busy = false, error = e.message ?: "Failed to create group")
                     }
-                )
-            }
+                }
+            )
         }
     }
 
@@ -162,11 +191,16 @@ class GroupManagementViewModel(
         val groupId = _state.value.selectedGroupId ?: return
 
         _state.update { it.copy(busy = true, error = null) }
-        viewModelScope.launch {
+        mutationJob = viewModelScope.launch {
             val result = members.addMember(groupId, normalizedEmail, role, name?.takeIf { it.isNotBlank() })
             _state.update { current ->
                 result.fold(
-                    onSuccess = { current.copy(busy = false) },
+                    onSuccess = {
+                        current.copy(
+                            busy = false,
+                            memberAddedCount = current.memberAddedCount + 1,
+                        )
+                    },
                     onFailure = { e -> current.copy(busy = false, error = e.message ?: "Failed to add member") }
                 )
             }
@@ -186,7 +220,7 @@ class GroupManagementViewModel(
         val groupId = _state.value.selectedGroupId ?: return
 
         _state.update { it.copy(busy = true, error = null) }
-        viewModelScope.launch {
+        mutationJob = viewModelScope.launch {
             val result = members.changeRole(groupId, normalizedEmail, role)
             _state.update { current ->
                 result.fold(
@@ -210,7 +244,7 @@ class GroupManagementViewModel(
         val groupId = _state.value.selectedGroupId ?: return
 
         _state.update { it.copy(busy = true, error = null) }
-        viewModelScope.launch {
+        mutationJob = viewModelScope.launch {
             val result = members.removeMember(groupId, normalizedEmail)
             _state.update { current ->
                 result.fold(

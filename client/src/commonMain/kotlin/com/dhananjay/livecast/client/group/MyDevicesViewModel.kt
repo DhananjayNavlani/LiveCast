@@ -48,6 +48,7 @@ class MyDevicesViewModel(
 
     private var currentDevices: List<HostDevice> = emptyList()
     private var currentMemberships: List<GroupMembership> = emptyList()
+    private var currentViewableGroupIds: List<String>? = null
 
     init {
         viewModelScope.launch {
@@ -63,16 +64,22 @@ class MyDevicesViewModel(
         tickerJob?.cancel()
         currentDevices = emptyList()
         currentMemberships = emptyList()
+        currentViewableGroupIds = null
 
         val user = (authState as? AuthState.Authenticated)?.user
-        val isGuest = user == null || user.isAnonymous || user.email.isNullOrBlank()
-
-        if (isGuest) {
-            _state.value = MyDevicesUiState(guest = true)
-            return
+        when (clientGate(user)) {
+            ClientGate.SIGN_IN, ClientGate.GUEST -> {
+                _state.value = MyDevicesUiState(guest = true)
+                return
+            }
+            ClientGate.VERIFY_EMAIL -> {
+                _state.value = MyDevicesUiState(guest = false)
+                return
+            }
+            ClientGate.READY -> {
+                _state.value = MyDevicesUiState(guest = false)
+            }
         }
-
-        _state.value = MyDevicesUiState(guest = false)
 
         activeJob = viewModelScope.launch {
             groups.observeMyMemberships()
@@ -87,7 +94,12 @@ class MyDevicesViewModel(
 
                     _state.update { it.copy(hasGroups = hasGroups) }
 
-                    observeDevicesForGroups(viewableIds)
+                    if (viewableIds != currentViewableGroupIds) {
+                        currentViewableGroupIds = viewableIds
+                        observeDevicesForGroups(viewableIds)
+                    } else {
+                        updateRows()
+                    }
                 }
         }
 

@@ -10,6 +10,7 @@ import com.dhananjay.livecast.protocol.GroupRules
 import com.dhananjay.livecast.protocol.HostDevice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -252,9 +253,28 @@ class MyDevicesViewModelTest {
 
         val g1 = Group("g1", "Group 1", "u1", 1000L)
         groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
-        devicesRepo.customFlow = flow { throw GroupError.AccessLost }
+
+        val stream = Channel<Any>()
+        devicesRepo.customFlow = flow {
+            for (item in stream) {
+                if (item is Throwable) throw item
+                if (item is List<*>) @Suppress("UNCHECKED_CAST") emit(item as List<HostDevice>)
+            }
+        }
 
         val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        runCurrent()
+
+        // 1. Emit one device and assert 1 row
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        stream.send(listOf(dev1))
+        runCurrent()
+
+        assertEquals(1, viewModel.state.value.rows.size)
+        assertNull(viewModel.state.value.error)
+
+        // 2. Fail the flow with GroupError.AccessLost (supervisor removed while list open)
+        stream.send(GroupError.AccessLost)
         runCurrent()
 
         assertEquals("You no longer have access", viewModel.state.value.error)
@@ -285,6 +305,63 @@ class MyDevicesViewModelTest {
 
         assertTrue(viewModel.state.value.guest)
         assertEquals(emptyList(), viewModel.state.value.rows)
+    }
+
+    @Test
+    fun verifiedUserSwitchResetsDevices() = runTest {
+        val clock = FakePresenceClock()
+        val userA = User("u1", "a@x.com", "User A", emailVerified = true)
+        val userB = User("u2", "b@x.com", "User B", emailVerified = true)
+        val auth = FakeMyDevicesSessionProvider(userA)
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        runCurrent()
+
+        assertEquals(1, viewModel.state.value.rows.size)
+        val initialObserveCount = devicesRepo.observedGroupIds.size
+
+        // Switch to verified user B
+        auth.setUser(userB)
+        runCurrent()
+
+        // B starts with no rows and observeDevices was called again for B
+        assertTrue(devicesRepo.observedGroupIds.size > initialObserveCount)
+    }
+
+    @Test
+    fun sameViewableIdsDoNotResubscribe() = runTest {
+        val clock = FakePresenceClock()
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        runCurrent()
+
+        assertEquals(1, devicesRepo.observedGroupIds.size)
+        assertEquals("Group 1", viewModel.state.value.rows.first().groupName)
+
+        // Emit new snapshot with same viewableGroupIds (rename group)
+        val g1Renamed = Group("g1", "Group 1 Renamed", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1Renamed, GroupRole.OWNER))
+        runCurrent()
+
+        // observeDevices should not be called again
+        assertEquals(1, devicesRepo.observedGroupIds.size)
+        // But rows should reflect updated group name
+        assertEquals("Group 1 Renamed", viewModel.state.value.rows.first().groupName)
     }
 
     @Test

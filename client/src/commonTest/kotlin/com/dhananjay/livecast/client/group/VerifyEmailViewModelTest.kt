@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -163,5 +164,28 @@ class VerifyEmailViewModelTest {
 
         assertEquals("Network offline", viewModel.state.value.message)
         assertFalse(viewModel.state.value.busy)
+    }
+
+    @Test
+    fun userSwitchResetsState() = runTest {
+        val userA = User("u1", "a@x.com", "User A", emailVerified = false)
+        val userB = User("u2", "b@x.com", "User B", emailVerified = false)
+        val session = FakeVerifyEmailSessionProvider(userA)
+        val verifier = FakeEmailVerifier()
+        val viewModel = VerifyEmailViewModel(session, verifier)
+
+        viewModel.send()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.sent)
+        assertEquals("a@x.com", viewModel.state.value.email)
+
+        session.setUser(userB)
+        runCurrent()
+
+        assertEquals("b@x.com", viewModel.state.value.email)
+        assertFalse(viewModel.state.value.sent)
+        assertFalse(viewModel.state.value.busy)
+        assertNull(viewModel.state.value.message)
     }
 }

@@ -23,6 +23,7 @@ import androidx.compose.material.TextButton
 import androidx.compose.material.TextFieldDefaults
 import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +56,19 @@ fun GroupManagementScreen(
     var newMemberEmail by remember { mutableStateOf("") }
     var newMemberName by remember { mutableStateOf("") }
     var newMemberRole by remember { mutableStateOf(GroupRole.DEVICE) }
+
+    LaunchedEffect(state.groupCreatedCount) {
+        if (state.groupCreatedCount > 0) {
+            newGroupName = ""
+        }
+    }
+
+    LaunchedEffect(state.memberAddedCount) {
+        if (state.memberAddedCount > 0) {
+            newMemberEmail = ""
+            newMemberName = ""
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -132,7 +146,6 @@ fun GroupManagementScreen(
                             text = "Create Group",
                             onClick = {
                                 viewModel.createGroup(newGroupName)
-                                newGroupName = ""
                             },
                             enabled = !state.busy && newGroupName.isNotBlank(),
                             variant = LiveCastButtonVariant.Primary,
@@ -257,8 +270,6 @@ fun GroupManagementScreen(
                                     text = "Add Member",
                                     onClick = {
                                         viewModel.addMember(newMemberEmail, newMemberRole, newMemberName)
-                                        newMemberEmail = ""
-                                        newMemberName = ""
                                     },
                                     enabled = !state.busy && newMemberEmail.isNotBlank(),
                                     variant = LiveCastButtonVariant.Primary,
