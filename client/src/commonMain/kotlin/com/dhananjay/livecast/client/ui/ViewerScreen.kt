@@ -26,7 +26,8 @@ import com.dhananjay.livecast.ui.theme.LiveCastTheme
 @Composable
 fun ViewerScreen(
     viewModel: LoginViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val user = uiState.user
@@ -106,6 +107,15 @@ fun ViewerScreen(
         )
 
         VerticalSpacer(32)
+
+        if (onBack != null) {
+            LiveCastButton(
+                text = "Back to devices",
+                onClick = onBack,
+                variant = LiveCastButtonVariant.Primary
+            )
+            VerticalSpacer(12)
+        }
 
         LiveCastButton(
             text = "Logout",

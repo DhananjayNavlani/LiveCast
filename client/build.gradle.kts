@@ -25,6 +25,21 @@ kotlin {
             implementation(compose.ui)
             implementation(compose.components.resources)
         }
+
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
+        }
+
+        androidMain.dependencies {
+            implementation(project.dependencies.platform(libs.firebase.android.bom))
+            implementation(libs.firebase.firestore)
+            implementation(libs.firebase.auth)
+        }
+
+        desktopMain.dependencies {
+            implementation(projects.firestoreGrpc)
+        }
     }
 }
 
