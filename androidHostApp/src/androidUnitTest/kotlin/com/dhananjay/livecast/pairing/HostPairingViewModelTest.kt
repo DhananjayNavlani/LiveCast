@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -260,6 +261,7 @@ class HostPairingViewModelTest {
         assertEquals<PairingCode?>(code, viewModel.uiState.value.code)
         // remainingMs = expiresAt - clock() = 7000L - 2000L = 5000L
         assertEquals(5000L, viewModel.uiState.value.remainingMs)
+        assertEquals(listOf(fakeDeviceInfo.current("H")), fakeRegistry.upsertedDevices)
     }
 
     @Test
@@ -354,5 +356,61 @@ class HostPairingViewModelTest {
         assertTrue(isAlreadyExistsException(wrappedCollision))
         assertFalse(isAlreadyExistsException(permissionDenied))
         assertFalse(isAlreadyExistsException(otherEx))
+    }
+
+    @Test
+    fun pendingRequestsStreamErrorSetsError() = runTest {
+        val fakeIdentity = FakeDeviceIdentity("H")
+        val fakeDeviceInfo = FakeHostDeviceInfoProvider()
+        val fakeRegistry = FakeDeviceRegistry()
+        val fakeCodes = FakePairingCodeIssuer()
+        val fakeInbox = object : PairingRequestInbox {
+            override fun observePendingRequests(deviceId: String): Flow<List<PairingRequest>> = flow {
+                throw RuntimeException("Inbox stream error")
+            }
+            override suspend fun approve(request: PairingRequest): Result<Unit> = Result.success(Unit)
+            override suspend fun deny(request: PairingRequest): Result<Unit> = Result.success(Unit)
+        }
+        val fakeSupervisors = FakeSupervisorDirectory()
+
+        val viewModel = HostPairingViewModel(
+            identity = fakeIdentity,
+            deviceInfo = fakeDeviceInfo,
+            registry = fakeRegistry,
+            codes = fakeCodes,
+            inbox = fakeInbox,
+            supervisors = fakeSupervisors,
+            clock = { 2000L }
+        )
+        advanceUntilIdle()
+
+        assertEquals("Inbox stream error", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun supervisorsStreamErrorSetsError() = runTest {
+        val fakeIdentity = FakeDeviceIdentity("H")
+        val fakeDeviceInfo = FakeHostDeviceInfoProvider()
+        val fakeRegistry = FakeDeviceRegistry()
+        val fakeCodes = FakePairingCodeIssuer()
+        val fakeInbox = FakePairingRequestInbox()
+        val fakeSupervisors = object : SupervisorDirectory {
+            override fun observeSupervisors(deviceId: String): Flow<List<Supervisor>> = flow {
+                throw RuntimeException("Supervisors stream error")
+            }
+        }
+
+        val viewModel = HostPairingViewModel(
+            identity = fakeIdentity,
+            deviceInfo = fakeDeviceInfo,
+            registry = fakeRegistry,
+            codes = fakeCodes,
+            inbox = fakeInbox,
+            supervisors = fakeSupervisors,
+            clock = { 2000L }
+        )
+        advanceUntilIdle()
+
+        assertEquals("Supervisors stream error", viewModel.uiState.value.error)
     }
 }

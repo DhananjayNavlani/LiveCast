@@ -14,8 +14,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
-private val toMillis: (Any) -> Long? = { (it as? Timestamp)?.toDate()?.time }
-
 interface PairingRequestInbox {
     fun observePendingRequests(deviceId: String): Flow<List<PairingRequest>>
     suspend fun approve(request: PairingRequest): Result<Unit>
@@ -39,7 +37,7 @@ class FirestorePairingRequestInbox(
             if (snapshot != null) {
                 val requests = snapshot.documents.mapNotNull { doc ->
                     val rawData = doc.data ?: return@mapNotNull null
-                    val data = normalizeTimestamps(rawData, toMillis)
+                    val data = normalizeTimestamps(rawData, firestoreTimestampToMillis)
                     pairingRequestFrom(doc.id, data)
                 }
                 trySend(requests)

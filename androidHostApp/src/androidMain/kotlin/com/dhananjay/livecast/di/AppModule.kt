@@ -20,6 +20,7 @@ import com.dhananjay.livecast.pairing.FirestorePairingRequestInbox
 import com.dhananjay.livecast.pairing.FirestoreSupervisorDirectory
 import com.dhananjay.livecast.pairing.HostDeviceInfoProvider
 import com.dhananjay.livecast.pairing.HostPairingViewModel
+import com.dhananjay.livecast.pairing.PairingCodeGenerator
 import com.dhananjay.livecast.pairing.PairingCodeIssuer
 import com.dhananjay.livecast.pairing.PairingRequestInbox
 import com.dhananjay.livecast.pairing.SupervisedByViewModel
@@ -61,10 +62,11 @@ val appModule = module {
     worker { DeviceOnlineWorker(get(),get(),get()) }
     viewModel { MainViewModel(get(),get(),get()) }
 
+    single { PairingCodeGenerator() }
     single<DeviceIdentity> { FirebaseDeviceIdentity(get()) }
     single<HostDeviceInfoProvider> { AndroidHostDeviceInfoProvider(androidContext()) }
     single<DeviceRegistry> { FirestoreDeviceRegistry(get()) }
-    single<PairingCodeIssuer> { FirestorePairingCodeIssuer(get()) }
+    single<PairingCodeIssuer> { FirestorePairingCodeIssuer(get(), get(), System::currentTimeMillis) }
     single<PairingRequestInbox> { FirestorePairingRequestInbox(get()) }
     single<SupervisorDirectory> { FirestoreSupervisorDirectory(get()) }
     viewModel { HostPairingViewModel(get(), get(), get(), get(), get(), get()) }

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -94,5 +95,21 @@ class SupervisedByViewModelTest {
         assertTrue(viewModel.supervisors.value.isEmpty())
         assertTrue(viewModel.supervisorNames.value.isEmpty())
         assertEquals(0, fakeDirectory.observeCalls)
+    }
+
+    @Test
+    fun supervisorsStreamErrorDoesNotCrash() = runTest {
+        val fakeIdentity = FakeDeviceIdentity("dev-123")
+        val fakeDirectory = object : SupervisorDirectory {
+            override fun observeSupervisors(deviceId: String): Flow<List<Supervisor>> = flow {
+                throw RuntimeException("Stream error")
+            }
+        }
+        val viewModel = SupervisedByViewModel(fakeIdentity, fakeDirectory)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.supervisors.value.isEmpty())
+        assertTrue(viewModel.supervisorNames.value.isEmpty())
+        assertEquals("Stream error", viewModel.error.value)
     }
 }

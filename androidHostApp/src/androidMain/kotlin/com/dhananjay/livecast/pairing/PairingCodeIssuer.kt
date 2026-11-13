@@ -15,8 +15,8 @@ interface PairingCodeIssuer {
 
 class FirestorePairingCodeIssuer(
     private val firestore: FirebaseFirestore,
-    private val generator: PairingCodeGenerator = PairingCodeGenerator(),
-    private val clock: () -> Long = System::currentTimeMillis
+    private val generator: PairingCodeGenerator,
+    private val clock: () -> Long
 ) : PairingCodeIssuer {
 
     override suspend fun createCode(deviceId: String): Result<PairingCode> = runCatching {

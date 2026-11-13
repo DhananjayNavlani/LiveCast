@@ -64,11 +64,11 @@ fun LiveCastNavigation(
                     emptyList()
                 )
                 val supervisedByViewModel: SupervisedByViewModel = koinViewModel()
-                val supervisors by supervisedByViewModel.supervisors.collectAsStateWithLifecycle()
+                val supervisorNames by supervisedByViewModel.supervisorNames.collectAsStateWithLifecycle()
 
                 StageScreen(
                     state = state,
-                    supervisors = supervisors,
+                    supervisorNames = supervisorNames,
                     onPairSupervisor = {
                         controller.navigate(Routes.PairSupervisorScreen)
                     },

@@ -8,6 +8,7 @@ import com.dhananjay.livecast.protocol.Supervisor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -51,19 +52,27 @@ class HostPairingViewModel(
         val deviceId = identity.deviceId
         if (deviceId != null) {
             viewModelScope.launch {
-                supervisors.observeSupervisors(deviceId).collect { supervisorsList ->
-                    _uiState.update { it.copy(supervisors = supervisorsList) }
-                }
+                supervisors.observeSupervisors(deviceId)
+                    .catch { e ->
+                        _uiState.update { it.copy(error = e.message ?: "Failed to observe supervisors") }
+                    }
+                    .collect { supervisorsList ->
+                        _uiState.update { it.copy(supervisors = supervisorsList) }
+                    }
             }
             viewModelScope.launch {
-                inbox.observePendingRequests(deviceId).collect { pending ->
-                    rawPendingRequests = pending
-                    val currentCode = _uiState.value.code
-                    val now = clock()
-                    _uiState.update {
-                        it.copy(requests = visibleRequests(pending, currentCode, now))
+                inbox.observePendingRequests(deviceId)
+                    .catch { e ->
+                        _uiState.update { it.copy(error = e.message ?: "Failed to observe pairing requests") }
                     }
-                }
+                    .collect { pending ->
+                        rawPendingRequests = pending
+                        val currentCode = _uiState.value.code
+                        val now = clock()
+                        _uiState.update {
+                            it.copy(requests = visibleRequests(pending, currentCode, now))
+                        }
+                    }
             }
         }
     }

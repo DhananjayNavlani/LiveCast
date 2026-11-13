@@ -4,13 +4,10 @@ import com.dhananjay.livecast.protocol.FirestorePaths
 import com.dhananjay.livecast.protocol.Supervisor
 import com.dhananjay.livecast.protocol.normalizeTimestamps
 import com.dhananjay.livecast.protocol.supervisorFrom
-import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-
-private val toMillis: (Any) -> Long? = { (it as? Timestamp)?.toDate()?.time }
 
 interface SupervisorDirectory {
     fun observeSupervisors(deviceId: String): Flow<List<Supervisor>>
@@ -33,7 +30,7 @@ class FirestoreSupervisorDirectory(
             if (snapshot != null) {
                 val supervisors = snapshot.documents.mapNotNull { doc ->
                     val rawData = doc.data ?: return@mapNotNull null
-                    val data = normalizeTimestamps(rawData, toMillis)
+                    val data = normalizeTimestamps(rawData, firestoreTimestampToMillis)
                     supervisorFrom(doc.id, data)
                 }
                 trySend(supervisors)
