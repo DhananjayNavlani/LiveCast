@@ -1,31 +1,32 @@
 package com.dhananjay.livecast.client.pairing
 
-import com.dhananjay.livecast.auth.AuthService
+import com.dhananjay.livecast.auth.SessionProvider
 import com.dhananjay.livecast.protocol.FirestorePaths
 import com.dhananjay.livecast.protocol.HostDevice
 import com.dhananjay.livecast.protocol.PairingFields
 import com.dhananjay.livecast.protocol.PairingRequest
 import com.dhananjay.livecast.protocol.PairingStatus
 import com.dhananjay.livecast.protocol.hostDeviceFrom
+import com.dhananjay.livecast.protocol.normalizeTimestamps
 import com.dhananjay.livecast.protocol.pairingCodeFrom
 import com.dhananjay.livecast.protocol.pairingRequestFrom
-import com.dhananjay.livecast.protocol.wire
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
-class AndroidClientPairingRepository(
-    private val authService: AuthService,
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
-) : ClientPairingRepository {
+class FirestoreSdkPairingRequestRepository(
+    private val firestore: FirebaseFirestore,
+    private val session: SessionProvider
+) : PairingRequestRepository {
 
     override suspend fun submitCode(code: String): Result<SubmittedRequest> {
-        val user = authService.currentUser ?: return Result.failure(PairingError.NotSignedIn)
+        val user = session.currentUser ?: return Result.failure(PairingError.NotSignedIn)
         if (user.isAnonymous) return Result.failure(PairingError.AnonymousNotAllowed)
 
         return runCatching {
@@ -34,23 +35,17 @@ class AndroidClientPairingRepository(
                 throw PairingError.InvalidOrExpiredCode
             }
 
-            val codeData = convertTimestamps(codeSnap.data ?: emptyMap())
+            val rawData = codeSnap.data ?: emptyMap()
+            val codeData = normalizeTimestamps(rawData) { (it as? Timestamp)?.toDate()?.time }
             val pairingCode = pairingCodeFrom(code, codeData) ?: throw PairingError.InvalidOrExpiredCode
 
             val nowMs = System.currentTimeMillis()
-            if (nowMs >= pairingCode.expiresAtEpochMs) {
-                throw PairingError.InvalidOrExpiredCode
-            }
+            PairingRequestPolicy.validateCode(pairingCode, nowMs).getOrThrow()
 
-            val requestData = hashMapOf(
-                PairingFields.CODE to code,
-                PairingFields.DEVICE_ID to pairingCode.deviceId,
-                PairingFields.CLIENT_UID to user.id,
-                PairingFields.CLIENT_NAME to (user.displayName ?: user.email ?: "Supervisor"),
-                PairingFields.CLIENT_EMAIL to user.email,
-                PairingFields.STATUS to PairingStatus.PENDING.wire(),
-                PairingFields.CREATED_AT to Timestamp.now()
-            )
+            val baseFields = PairingRequestPolicy.requestFields(user, pairingCode)
+            val requestData = HashMap<String, Any?>(baseFields).apply {
+                put(PairingFields.CREATED_AT, Timestamp.now())
+            }
 
             val ref = firestore.collection(FirestorePaths.PAIRING_REQUESTS).add(requestData).await()
             val request = PairingRequest(
@@ -76,7 +71,8 @@ class AndroidClientPairingRepository(
                 return@addSnapshotListener
             }
             if (snapshot != null && snapshot.exists()) {
-                val data = convertTimestamps(snapshot.data ?: emptyMap())
+                val rawData = snapshot.data ?: emptyMap()
+                val data = normalizeTimestamps(rawData) { (it as? Timestamp)?.toDate()?.time }
                 trySend(pairingRequestFrom(snapshot.id, data))
             } else {
                 trySend(null)
@@ -84,9 +80,15 @@ class AndroidClientPairingRepository(
         }
         awaitClose { registration.remove() }
     }
+}
+
+class FirestoreSdkSupervisedDeviceRepository(
+    private val firestore: FirebaseFirestore,
+    private val session: SessionProvider
+) : SupervisedDeviceRepository {
 
     override fun observeMyDevices(): Flow<List<HostDevice>> = callbackFlow {
-        val user = authService.currentUser
+        val user = session.currentUser
         if (user == null) {
             trySend(emptyList())
             close()
@@ -104,14 +106,15 @@ class AndroidClientPairingRepository(
             if (snapshot != null) {
                 launch {
                     val deviceIds = snapshot.documents.mapNotNull { doc ->
-                        doc.reference.parent?.parent?.id
+                        PairingRequestPolicy.deviceIdFromSupervisorPath(doc.reference.path)
                     }.distinct()
 
                     val devices = deviceIds.mapNotNull { deviceId ->
                         try {
                             val devSnap = firestore.document(FirestorePaths.device(deviceId)).get().await()
                             if (devSnap.exists()) {
-                                val data = convertTimestamps(devSnap.data ?: emptyMap())
+                                val rawData = devSnap.data ?: emptyMap()
+                                val data = normalizeTimestamps(rawData) { (it as? Timestamp)?.toDate()?.time }
                                 hostDeviceFrom(deviceId, data)
                             } else null
                         } catch (_: Exception) {
@@ -126,24 +129,17 @@ class AndroidClientPairingRepository(
     }
 
     override suspend fun removeDevice(deviceId: String): Result<Unit> {
-        val user = authService.currentUser ?: return Result.failure(PairingError.NotSignedIn)
+        val user = session.currentUser ?: return Result.failure(PairingError.NotSignedIn)
         return runCatching {
             val supervisorPath = FirestorePaths.supervisor(deviceId, user.id)
             firestore.document(supervisorPath).delete().await()
             Unit
         }
     }
-
-    private fun convertTimestamps(rawData: Map<String, Any?>): Map<String, Any?> {
-        return rawData.mapValues { (_, value) ->
-            when (value) {
-                is Timestamp -> value.toDate().time
-                is Map<*, *> -> @Suppress("UNCHECKED_CAST") convertTimestamps(value as Map<String, Any?>)
-                else -> value
-            }
-        }
-    }
 }
 
-actual fun createClientPairingRepository(authService: AuthService): ClientPairingRepository =
-    AndroidClientPairingRepository(authService)
+actual val pairingPlatformModule: Module = module {
+    single { FirebaseFirestore.getInstance() }
+    single<PairingRequestRepository> { FirestoreSdkPairingRequestRepository(get(), get()) }
+    single<SupervisedDeviceRepository> { FirestoreSdkSupervisedDeviceRepository(get(), get()) }
+}

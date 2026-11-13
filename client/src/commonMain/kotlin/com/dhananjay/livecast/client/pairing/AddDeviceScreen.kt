@@ -45,7 +45,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun AddDeviceScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ClientPairingViewModel = koinViewModel(),
+    viewModel: AddDeviceViewModel = koinViewModel(),
     onPaired: (String) -> Unit = {}
 ) {
     val addState by viewModel.addState.collectAsState()

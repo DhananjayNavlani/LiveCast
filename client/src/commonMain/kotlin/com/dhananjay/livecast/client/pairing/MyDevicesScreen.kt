@@ -46,7 +46,7 @@ fun MyDevicesScreen(
     onAddDevice: () -> Unit,
     onDeviceClick: (HostDevice) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ClientPairingViewModel = koinViewModel(),
+    viewModel: MyDevicesViewModel = koinViewModel(),
     onSignOut: (() -> Unit)? = null
 ) {
     val devices by viewModel.devices.collectAsState()

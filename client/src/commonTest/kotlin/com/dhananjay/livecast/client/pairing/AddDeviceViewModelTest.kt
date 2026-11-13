@@ -1,10 +1,8 @@
 package com.dhananjay.livecast.client.pairing
 
-import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
-import com.dhananjay.livecast.auth.AuthService
+import com.dhananjay.livecast.auth.SessionProvider
 import com.dhananjay.livecast.auth.User
-import com.dhananjay.livecast.protocol.HostDevice
 import com.dhananjay.livecast.protocol.PairingRequest
 import com.dhananjay.livecast.protocol.PairingStatus
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +13,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -28,9 +25,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-class FakeAuthService(
+class FakeSessionProvider(
     override var currentUser: User? = null
-) : AuthService {
+) : SessionProvider {
     private val _authState = MutableStateFlow<AuthState>(
         currentUser?.let { AuthState.Authenticated(it) } ?: AuthState.Unauthenticated
     )
@@ -41,39 +38,16 @@ class FakeAuthService(
         _authState.value = user?.let { AuthState.Authenticated(it) } ?: AuthState.Unauthenticated
     }
 
-    override fun isLoggedIn(): Boolean = currentUser != null
-
-    override suspend fun signInWithEmailAndPassword(email: String, password: String): AuthResult =
-        currentUser?.let { AuthResult.Success(it) } ?: AuthResult.Error("Failed")
-
-    override suspend fun createUserWithEmailAndPassword(email: String, password: String): AuthResult =
-        currentUser?.let { AuthResult.Success(it) } ?: AuthResult.Error("Failed")
-
-    override suspend fun signInAnonymously(): AuthResult =
-        currentUser?.let { AuthResult.Success(it) } ?: AuthResult.Error("Failed")
-
-    override suspend fun signOut() {
-        currentUser = null
-        _authState.value = AuthState.Unauthenticated
-    }
-
-    override suspend fun sendPasswordResetEmail(email: String): AuthResult =
-        currentUser?.let { AuthResult.Success(it) } ?: AuthResult.Error("Failed")
-
     override suspend fun getIdToken(forceRefresh: Boolean): String? = "fake-token"
 }
 
-class FakeClientPairingRepository : ClientPairingRepository {
+class FakePairingRequestRepository : PairingRequestRepository {
     var submitResult: Result<SubmittedRequest>? = null
     var submitCount = 0
     var submitDelayMs = 0L
     var lastSubmittedCode: String? = null
     val requestFlows = mutableMapOf<String, MutableStateFlow<PairingRequest?>>()
-    var myDevicesFlow: Flow<List<HostDevice>> = MutableStateFlow<List<HostDevice>>(emptyList())
-    var devicesFlowProvider: (() -> Flow<List<HostDevice>>)? = null
     var requestFlowProvider: ((String) -> Flow<PairingRequest?>)? = null
-    var removeResult: Result<Unit> = Result.success(Unit)
-    val removedDeviceIds = mutableListOf<String>()
 
     override suspend fun submitCode(code: String): Result<SubmittedRequest> {
         submitCount++
@@ -94,18 +68,10 @@ class FakeClientPairingRepository : ClientPairingRepository {
     fun emitRequest(requestId: String, request: PairingRequest?) {
         requestFlows.getOrPut(requestId) { MutableStateFlow(null) }.value = request
     }
-
-    override fun observeMyDevices(): Flow<List<HostDevice>> =
-        devicesFlowProvider?.invoke() ?: myDevicesFlow
-
-    override suspend fun removeDevice(deviceId: String): Result<Unit> {
-        removedDeviceIds.add(deviceId)
-        return removeResult
-    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class ClientPairingViewModelTest {
+class AddDeviceViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -121,9 +87,9 @@ class ClientPairingViewModelTest {
 
     @Test
     fun codeInputDigitsOnlyMax6() {
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
-        val repo = FakeClientPairingRepository()
-        val viewModel = ClientPairingViewModel(repo, auth)
+        val auth = FakeSessionProvider(User("u1", "u1@example.com", "User 1"))
+        val repo = FakePairingRequestRepository()
+        val viewModel = AddDeviceViewModel(repo, auth)
 
         viewModel.onCodeChanged("12a3456789")
         val state = viewModel.addState.value
@@ -133,9 +99,9 @@ class ClientPairingViewModelTest {
 
     @Test
     fun anonymousCannotSubmit() = runTest {
-        val auth = FakeAuthService(User("u_anon", null, null, isAnonymous = true))
-        val repo = FakeClientPairingRepository()
-        val viewModel = ClientPairingViewModel(repo, auth)
+        val auth = FakeSessionProvider(User("u_anon", null, null, isAnonymous = true))
+        val repo = FakePairingRequestRepository()
+        val viewModel = AddDeviceViewModel(repo, auth)
 
         viewModel.onCodeChanged("123456")
         viewModel.submit()
@@ -149,11 +115,11 @@ class ClientPairingViewModelTest {
 
     @Test
     fun invalidCodeShowsError() = runTest {
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
-        val repo = FakeClientPairingRepository().apply {
+        val auth = FakeSessionProvider(User("u1", "u1@example.com", "User 1"))
+        val repo = FakePairingRequestRepository().apply {
             submitResult = Result.failure(PairingError.InvalidOrExpiredCode)
         }
-        val viewModel = ClientPairingViewModel(repo, auth)
+        val viewModel = AddDeviceViewModel(repo, auth)
 
         viewModel.onCodeChanged("123456")
         viewModel.submit()
@@ -167,7 +133,7 @@ class ClientPairingViewModelTest {
     @Test
     fun approvedFlow() = runTest {
         val now = 1000L
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
+        val auth = FakeSessionProvider(User("u1", "u1@example.com", "User 1"))
         val pendingRequest = PairingRequest(
             id = "req1",
             code = "123456",
@@ -179,10 +145,10 @@ class ClientPairingViewModelTest {
             createdAtEpochMs = now,
             decidedAtEpochMs = null
         )
-        val repo = FakeClientPairingRepository().apply {
+        val repo = FakePairingRequestRepository().apply {
             submitResult = Result.success(SubmittedRequest(pendingRequest, codeExpiresAtEpochMs = now + 600_000L))
         }
-        val viewModel = ClientPairingViewModel(repo, auth, clock = { now })
+        val viewModel = AddDeviceViewModel(repo, auth, clock = { now })
 
         viewModel.onCodeChanged("123456")
         viewModel.submit()
@@ -205,7 +171,7 @@ class ClientPairingViewModelTest {
     @Test
     fun deniedFlow() = runTest {
         val now = 1000L
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
+        val auth = FakeSessionProvider(User("u1", "u1@example.com", "User 1"))
         val pendingRequest = PairingRequest(
             id = "req1",
             code = "123456",
@@ -217,10 +183,10 @@ class ClientPairingViewModelTest {
             createdAtEpochMs = now,
             decidedAtEpochMs = null
         )
-        val repo = FakeClientPairingRepository().apply {
+        val repo = FakePairingRequestRepository().apply {
             submitResult = Result.success(SubmittedRequest(pendingRequest, codeExpiresAtEpochMs = now + 600_000L))
         }
-        val viewModel = ClientPairingViewModel(repo, auth, clock = { now })
+        val viewModel = AddDeviceViewModel(repo, auth, clock = { now })
 
         viewModel.onCodeChanged("123456")
         viewModel.submit()
@@ -236,7 +202,7 @@ class ClientPairingViewModelTest {
 
     @Test
     fun expiresWhileWaiting() = runTest {
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
+        val auth = FakeSessionProvider(User("u1", "u1@example.com", "User 1"))
         val expiresAt = 601_000L
         val pendingRequest = PairingRequest(
             id = "req1",
@@ -249,10 +215,10 @@ class ClientPairingViewModelTest {
             createdAtEpochMs = 1000L,
             decidedAtEpochMs = null
         )
-        val repo = FakeClientPairingRepository().apply {
+        val repo = FakePairingRequestRepository().apply {
             submitResult = Result.success(SubmittedRequest(pendingRequest, codeExpiresAtEpochMs = expiresAt))
         }
-        val viewModel = ClientPairingViewModel(repo, auth, clock = { testScheduler.currentTime })
+        val viewModel = AddDeviceViewModel(repo, auth, clock = { testScheduler.currentTime })
 
         viewModel.onCodeChanged("123456")
         viewModel.submit()
@@ -268,7 +234,7 @@ class ClientPairingViewModelTest {
     @Test
     fun submitIgnoredWhileBusy() = runTest {
         val now = 1000L
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
+        val auth = FakeSessionProvider(User("u1", "u1@example.com", "User 1"))
         val pendingRequest = PairingRequest(
             id = "req1",
             code = "123456",
@@ -280,11 +246,11 @@ class ClientPairingViewModelTest {
             createdAtEpochMs = now,
             decidedAtEpochMs = null
         )
-        val repo = FakeClientPairingRepository().apply {
+        val repo = FakePairingRequestRepository().apply {
             submitDelayMs = 5000L
             submitResult = Result.success(SubmittedRequest(pendingRequest, codeExpiresAtEpochMs = now + 600_000L))
         }
-        val viewModel = ClientPairingViewModel(repo, auth, clock = { now })
+        val viewModel = AddDeviceViewModel(repo, auth, clock = { now })
 
         viewModel.onCodeChanged("123456")
         viewModel.submit()
@@ -299,34 +265,9 @@ class ClientPairingViewModelTest {
     }
 
     @Test
-    fun removeDelegates() = runTest {
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
-        val repo = FakeClientPairingRepository()
-        val viewModel = ClientPairingViewModel(repo, auth)
-
-        viewModel.remove("d1")
-        testScheduler.runCurrent()
-
-        assertEquals(listOf("d1"), repo.removedDeviceIds)
-    }
-
-    @Test
-    fun devicesStreamErrorSetsErrorNoCrash() = runTest {
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
-        val repo = FakeClientPairingRepository().apply {
-            myDevicesFlow = flow { throw RuntimeException("Network error on devices stream") }
-        }
-        val viewModel = ClientPairingViewModel(repo, auth)
-        testScheduler.runCurrent()
-
-        assertEquals("Network error on devices stream", viewModel.devicesError.value)
-        assertEquals(emptyList(), viewModel.devices.value)
-    }
-
-    @Test
     fun requestStreamErrorReturnsToEntering() = runTest {
         val now = 1000L
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
+        val auth = FakeSessionProvider(User("u1", "u1@example.com", "User 1"))
         val pendingRequest = PairingRequest(
             id = "req1",
             code = "123456",
@@ -338,11 +279,11 @@ class ClientPairingViewModelTest {
             createdAtEpochMs = now,
             decidedAtEpochMs = null
         )
-        val repo = FakeClientPairingRepository().apply {
+        val repo = FakePairingRequestRepository().apply {
             submitResult = Result.success(SubmittedRequest(pendingRequest, codeExpiresAtEpochMs = now + 600_000L))
             requestFlowProvider = { flow { throw RuntimeException("Permission denied on request stream") } }
         }
-        val viewModel = ClientPairingViewModel(repo, auth, clock = { now })
+        val viewModel = AddDeviceViewModel(repo, auth, clock = { now })
 
         viewModel.onCodeChanged("123456")
         viewModel.submit()
@@ -352,48 +293,5 @@ class ClientPairingViewModelTest {
         assertIs<AddDeviceState.Entering>(state)
         assertEquals("123456", state.code)
         assertEquals("Permission denied on request stream", state.error)
-    }
-
-    @Test
-    fun devicesResubscribeOnUserChange() = runTest {
-        val userA = User("u1", "u1@example.com", "User 1")
-        val userB = User("u2", "u2@example.com", "User 2")
-        val auth = FakeAuthService(userA)
-
-        val deviceA = HostDevice("d1", "Phone A", "Pixel")
-        val deviceB = HostDevice("d2", "Phone B", "Samsung")
-
-        val repo = FakeClientPairingRepository().apply {
-            devicesFlowProvider = {
-                val currentUid = auth.currentUser?.id
-                if (currentUid == "u1") flowOf(listOf(deviceA))
-                else if (currentUid == "u2") flowOf(listOf(deviceB))
-                else flowOf(emptyList())
-            }
-        }
-        val viewModel = ClientPairingViewModel(repo, auth)
-        testScheduler.runCurrent()
-
-        assertEquals(listOf(deviceA), viewModel.devices.value)
-
-        auth.setUser(userB)
-        testScheduler.runCurrent()
-
-        assertEquals(listOf(deviceB), viewModel.devices.value)
-    }
-
-    @Test
-    fun removeFailureSetsError() = runTest {
-        val auth = FakeAuthService(User("u1", "u1@example.com", "User 1"))
-        val repo = FakeClientPairingRepository().apply {
-            removeResult = Result.failure(RuntimeException("Delete denied"))
-        }
-        val viewModel = ClientPairingViewModel(repo, auth)
-        testScheduler.runCurrent()
-
-        viewModel.remove("d1")
-        testScheduler.runCurrent()
-
-        assertEquals("Delete denied", viewModel.devicesError.value)
     }
 }
