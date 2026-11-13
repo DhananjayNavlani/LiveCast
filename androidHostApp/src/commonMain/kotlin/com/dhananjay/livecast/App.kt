@@ -88,7 +88,7 @@ fun App() {
                 val loginViewModel: LoginViewModel = koinViewModel()
                 StageScreenPlaceholder(
                     viewModel = loginViewModel,
-                    role = selectedRole ?: UserRole.Subscriber,
+                    role = selectedRole ?: UserRole.Broadcaster,
                     onLogout = {
                         currentScreen = Routes.LandingScreen
                     },

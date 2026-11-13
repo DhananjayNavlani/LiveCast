@@ -188,7 +188,8 @@ fun AuthLoginScreen(
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 focusManager.clearFocus()
-                                if (selectedRole != null) viewModel.signIn()
+                                selectedRole = UserRole.Broadcaster
+                                viewModel.signIn()
                             }
                         ),
                         trailingIcon = {
@@ -256,38 +257,16 @@ fun AuthLoginScreen(
 
                     VerticalSpacer(24)
 
-                    Text(
-                        text = "Select your role:",
-                        style = LiveCastTheme.typography.body2,
-                        color = LiveCastTheme.colors.textSecondary
-                    )
-
-                    VerticalSpacer(12)
-
                     LiveCastButton(
-                        text = if (uiState.isSignUpMode) "📺 Sign Up as Subscriber" else "📺 Sign In as Subscriber",
+                        text = if (uiState.isSignUpMode) "📡 Sign Up as Broadcaster" else "📡 Sign In as Broadcaster",
                         onClick = {
-                            selectedRole = UserRole.Subscriber
+                            selectedRole = UserRole.Broadcaster
                             viewModel.signIn()
                         },
                         variant = LiveCastButtonVariant.Primary,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !uiState.isLoading
                     )
-
-                    if (platformCapabilities.canBroadcast) {
-                        VerticalSpacer(12)
-                        LiveCastButton(
-                            text = if (uiState.isSignUpMode) "📡 Sign Up as Broadcaster" else "📡 Sign In as Broadcaster",
-                            onClick = {
-                                selectedRole = UserRole.Broadcaster
-                                viewModel.signIn()
-                            },
-                            variant = LiveCastButtonVariant.Secondary,
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !uiState.isLoading
-                        )
-                    }
 
                     if (uiState.isLoading) {
                         VerticalSpacer(16)
@@ -324,7 +303,7 @@ fun AuthLoginScreen(
             ) {
                 OutlinedButton(
                     onClick = {
-                        selectedRole = UserRole.Subscriber
+                        selectedRole = UserRole.Broadcaster
                         viewModel.signInAsGuest()
                     },
                     modifier = Modifier.fillMaxWidth().padding(4.dp),
