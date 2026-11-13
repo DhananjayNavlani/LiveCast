@@ -1,6 +1,7 @@
 package com.dhananjay.livecast.client.pairing
 
 import com.dhananjay.livecast.auth.AuthService
+import com.dhananjay.livecast.firestore.grpc.FirestoreConnectionConfig
 import com.dhananjay.livecast.firestore.grpc.FirestoreDoc
 import com.dhananjay.livecast.firestore.grpc.FirestoreGrpcClient
 import com.dhananjay.livecast.firestore.grpc.FirestoreQuery
@@ -42,12 +43,15 @@ class DesktopClientPairingRepository(
         } else {
             Triple("firestore.googleapis.com", 443, false)
         }
-        FirestoreGrpcClient(
+        val config = FirestoreConnectionConfig(
             projectId = pid,
-            tokenProvider = { forceRefresh -> authService.getIdToken(forceRefresh) },
             host = host,
             port = port,
             plaintext = plaintext
+        )
+        FirestoreGrpcClient(
+            config = config,
+            tokenProvider = { forceRefresh -> authService.getIdToken(forceRefresh) }
         )
     }
 

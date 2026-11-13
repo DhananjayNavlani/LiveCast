@@ -40,20 +40,25 @@ sealed class AuthResult {
 }
 
 /**
+ * Provider interface for obtaining the current user's ID token.
+ */
+interface IdTokenProvider {
+    suspend fun getIdToken(forceRefresh: Boolean = false): String?
+}
+
+/**
+ * Provider interface for observing authentication state and the current user.
+ */
+interface SessionProvider : IdTokenProvider {
+    val authState: StateFlow<AuthState>
+    val currentUser: User?
+}
+
+/**
  * Cross-platform authentication service interface.
  * Platform-specific implementations will handle actual authentication.
  */
-interface AuthService {
-    /**
-     * Current authentication state as a Flow
-     */
-    val authState: StateFlow<AuthState>
-
-    /**
-     * Get the currently logged in user, or null if not authenticated
-     */
-    val currentUser: User?
-
+interface AuthService : SessionProvider {
     /**
      * Check if user is currently logged in
      */
@@ -83,10 +88,4 @@ interface AuthService {
      * Send password reset email
      */
     suspend fun sendPasswordResetEmail(email: String): AuthResult
-
-    /**
-     * Get the current user's ID token.
-     */
-    suspend fun getIdToken(forceRefresh: Boolean = false): String?
 }
-

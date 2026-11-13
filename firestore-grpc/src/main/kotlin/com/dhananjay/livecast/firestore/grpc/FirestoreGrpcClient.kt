@@ -70,16 +70,26 @@ internal fun nextReconnectAction(
 }
 
 class FirestoreGrpcClient(
-    val projectId: String,
-    val tokenProvider: suspend (forceRefresh: Boolean) -> String?,
-    host: String = "firestore.googleapis.com",
-    port: Int = 443,
-    plaintext: Boolean = false,
-) : AutoCloseable {
+    val config: FirestoreConnectionConfig,
+    val tokenProvider: suspend (forceRefresh: Boolean) -> String?
+) : DocumentStore, AutoCloseable {
+
+    val projectId: String get() = config.projectId
+
+    constructor(
+        projectId: String,
+        tokenProvider: suspend (forceRefresh: Boolean) -> String?,
+        host: String = "firestore.googleapis.com",
+        port: Int = 443,
+        plaintext: Boolean = false
+    ) : this(
+        config = FirestoreConnectionConfig(projectId, host, port, plaintext),
+        tokenProvider = tokenProvider
+    )
 
     private val grpcChannel: ManagedChannel = run {
-        val builder = ManagedChannelBuilder.forAddress(host, port)
-        if (plaintext) {
+        val builder = ManagedChannelBuilder.forAddress(config.host, config.port)
+        if (config.plaintext) {
             builder.usePlaintext()
         } else {
             builder.useTransportSecurity()
@@ -99,7 +109,7 @@ class FirestoreGrpcClient(
         }
     }
 
-    suspend fun get(path: String): FirestoreDoc? {
+    override suspend fun get(path: String): FirestoreDoc? {
         val fullPath = normalizeDocPath(path, projectId)
         val metadata = getAuthMetadata(forceRefresh = false)
         val stub = FirestoreGrpc.newBlockingStub(grpcChannel)
@@ -120,7 +130,7 @@ class FirestoreGrpcClient(
         }
     }
 
-    suspend fun createWithAutoId(collectionPath: String, fields: Map<String, Any?>): String {
+    override suspend fun createWithAutoId(collectionPath: String, fields: Map<String, Any?>): String {
         val relativeCol = toRelativeDocPath(collectionPath, projectId)
         val (parent, collectionId) = if (relativeCol.contains('/')) {
             val parentRel = relativeCol.substringBeforeLast('/')
@@ -149,7 +159,7 @@ class FirestoreGrpcClient(
         return resp.name.substringAfterLast('/')
     }
 
-    suspend fun commit(writes: List<FirestoreWrite>) {
+    override suspend fun commit(writes: List<FirestoreWrite>) {
         if (writes.isEmpty()) return
         val databasePath = "projects/$projectId/databases/(default)"
 
@@ -209,119 +219,10 @@ class FirestoreGrpcClient(
         }
     }
 
-    fun listenDocument(path: String): Flow<FirestoreDoc?> = channelFlow {
+    override fun listenDocument(path: String): Flow<FirestoreDoc?> {
         val fullDocPath = normalizeDocPath(path, projectId)
-        val databasePath = "projects/$projectId/databases/(default)"
-
-        var resumeToken: ByteString? = null
-        var backoffMs = 1000L
-        var forceRefreshNext = false
-        var consecutiveUnauth = 0
-
-        while (isActive) {
-            val metadata = try {
-                getAuthMetadata(forceRefreshNext)
-            } catch (e: Exception) {
-                if (!isActive) break
-                delay(backoffMs)
-                backoffMs = (backoffMs * 2).coerceAtMost(30000L)
-                continue
-            }
-            forceRefreshNext = false
-
-            val stub = FirestoreGrpc.newStub(grpcChannel)
-                .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
-
-            val streamClosed = CompletableDeferred<StreamCloseReason>()
-            var activeRequestObserver: StreamObserver<ListenRequest>? = null
-
-            var currentDoc: FirestoreDoc? = null
-            var hasSeenDocInThisSnapshot = false
-            var hasCurrent = false
-
-            val responseObserver = object : StreamObserver<ListenResponse> {
-                override fun onNext(resp: ListenResponse) {
-                    when (resp.responseTypeCase) {
-                        ListenResponse.ResponseTypeCase.TARGET_CHANGE -> {
-                            val tc = resp.targetChange
-                            if (tc.resumeToken != null && !tc.resumeToken.isEmpty) {
-                                resumeToken = tc.resumeToken
-                            }
-                            when (tc.targetChangeType) {
-                                TargetChange.TargetChangeType.CURRENT -> {
-                                    hasCurrent = true
-                                    backoffMs = 1000L
-                                    consecutiveUnauth = 0
-                                    if (!hasSeenDocInThisSnapshot && currentDoc == null) {
-                                        trySend(null)
-                                    }
-                                }
-                                TargetChange.TargetChangeType.NO_CHANGE -> {
-                                    if (tc.hasCause()) {
-                                        val status = Status.fromCodeValue(tc.cause.code)
-                                        if (status.code == Status.Code.UNAUTHENTICATED) {
-                                            streamClosed.complete(StreamCloseReason.Unauthenticated)
-                                            return
-                                        }
-                                    }
-                                }
-                                TargetChange.TargetChangeType.REMOVE -> {
-                                    val status = if (tc.hasCause()) Status.fromCodeValue(tc.cause.code) else Status.UNKNOWN
-                                    if (status.code == Status.Code.UNAUTHENTICATED) {
-                                        streamClosed.complete(StreamCloseReason.Unauthenticated)
-                                    } else {
-                                        streamClosed.complete(StreamCloseReason.Error(status.asRuntimeException()))
-                                    }
-                                    return
-                                }
-                                TargetChange.TargetChangeType.RESET -> {
-                                    currentDoc = null
-                                    hasSeenDocInThisSnapshot = false
-                                }
-                                else -> {}
-                            }
-                        }
-                        ListenResponse.ResponseTypeCase.DOCUMENT_CHANGE -> {
-                            val dc = resp.documentChange
-                            val doc = toFirestoreDoc(dc.document, projectId)
-                            currentDoc = doc
-                            hasSeenDocInThisSnapshot = true
-                            trySend(doc)
-                        }
-                        ListenResponse.ResponseTypeCase.DOCUMENT_DELETE,
-                        ListenResponse.ResponseTypeCase.DOCUMENT_REMOVE -> {
-                            currentDoc = null
-                            hasSeenDocInThisSnapshot = false
-                            trySend(null)
-                        }
-                        else -> {}
-                    }
-                }
-
-                override fun onError(t: Throwable) {
-                    val status = Status.fromThrowable(t)
-                    when (status.code) {
-                        Status.Code.UNAUTHENTICATED -> {
-                            streamClosed.complete(StreamCloseReason.Unauthenticated)
-                        }
-                        Status.Code.UNAVAILABLE -> {
-                            streamClosed.complete(StreamCloseReason.Unavailable)
-                        }
-                        else -> {
-                            streamClosed.complete(StreamCloseReason.Error(t))
-                        }
-                    }
-                }
-
-                override fun onCompleted() {
-                    streamClosed.complete(StreamCloseReason.Completed)
-                }
-            }
-
-            try {
-                val reqObserver = stub.listen(responseObserver)
-                activeRequestObserver = reqObserver
-
+        return listenWithReducer(
+            buildTarget = { resumeToken ->
                 val targetBuilder = Target.newBuilder()
                     .setTargetId(1)
                     .setDocuments(
@@ -329,206 +230,24 @@ class FirestoreGrpcClient(
                             .addDocuments(fullDocPath)
                             .build()
                     )
-                val token = resumeToken
-                if (token != null && !token.isEmpty) {
-                    targetBuilder.setResumeToken(token)
+                if (resumeToken != null && !resumeToken.isEmpty) {
+                    targetBuilder.setResumeToken(resumeToken)
                 }
-
-                val listenReq = ListenRequest.newBuilder()
-                    .setDatabase(databasePath)
-                    .setAddTarget(targetBuilder.build())
-                    .build()
-
-                reqObserver.onNext(listenReq)
-
-                val reason = streamClosed.await()
-                when (val action = nextReconnectAction(reason, consecutiveUnauth, backoffMs)) {
-                    is ReconnectAction.RetryNow -> {
-                        forceRefreshNext = action.forceRefresh
-                        consecutiveUnauth++
-                    }
-                    is ReconnectAction.RetryAfter -> {
-                        delay(action.delayMs)
-                        backoffMs = action.nextBackoffMs
-                    }
-                    is ReconnectAction.Fail -> {
-                        if (isActive) {
-                            close(action.throwable)
-                        }
-                        break
-                    }
-                }
-            } catch (e: CancellationException) {
-                try {
-                    activeRequestObserver?.onCompleted()
-                } catch (_: Exception) {}
-                throw e
-            } catch (e: Exception) {
-                val status = Status.fromThrowable(e)
-                val reason = when (status.code) {
-                    Status.Code.UNAUTHENTICATED -> StreamCloseReason.Unauthenticated
-                    Status.Code.UNAVAILABLE -> StreamCloseReason.Unavailable
-                    else -> StreamCloseReason.Error(e)
-                }
-                when (val action = nextReconnectAction(reason, consecutiveUnauth, backoffMs)) {
-                    is ReconnectAction.RetryNow -> {
-                        forceRefreshNext = action.forceRefresh
-                        consecutiveUnauth++
-                    }
-                    is ReconnectAction.RetryAfter -> {
-                        delay(action.delayMs)
-                        backoffMs = action.nextBackoffMs
-                    }
-                    is ReconnectAction.Fail -> {
-                        if (isActive) close(action.throwable)
-                        break
-                    }
-                }
-            } finally {
-                try {
-                    activeRequestObserver?.onCompleted()
-                } catch (_: Exception) {}
-            }
-        }
+                targetBuilder.build()
+            },
+            reducerFactory = { DocumentListenReducer() }
+        )
     }
 
-    fun listenQuery(query: FirestoreQuery): Flow<List<FirestoreDoc>> = channelFlow {
-        val databasePath = "projects/$projectId/databases/(default)"
+    override fun listenQuery(query: FirestoreQuery): Flow<List<FirestoreDoc>> {
         val parent = if (query.parentPath.isBlank()) {
             "projects/$projectId/databases/(default)/documents"
         } else {
             "projects/$projectId/databases/(default)/documents/${toRelativeDocPath(query.parentPath, projectId)}"
         }
 
-        var resumeToken: ByteString? = null
-        var backoffMs = 1000L
-        var forceRefreshNext = false
-        var consecutiveUnauth = 0
-
-        while (isActive) {
-            val metadata = try {
-                getAuthMetadata(forceRefreshNext)
-            } catch (e: Exception) {
-                if (!isActive) break
-                delay(backoffMs)
-                backoffMs = (backoffMs * 2).coerceAtMost(30000L)
-                continue
-            }
-            forceRefreshNext = false
-
-            val stub = FirestoreGrpc.newStub(grpcChannel)
-                .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
-
-            val streamClosed = CompletableDeferred<StreamCloseReason>()
-            var activeRequestObserver: StreamObserver<ListenRequest>? = null
-
-            val currentDocs = mutableMapOf<String, FirestoreDoc>()
-            var hasCurrent = false
-            var dirty = false
-
-            val responseObserver = object : StreamObserver<ListenResponse> {
-                override fun onNext(resp: ListenResponse) {
-                    when (resp.responseTypeCase) {
-                        ListenResponse.ResponseTypeCase.TARGET_CHANGE -> {
-                            val tc = resp.targetChange
-                            if (tc.resumeToken != null && !tc.resumeToken.isEmpty) {
-                                resumeToken = tc.resumeToken
-                            }
-                            when (tc.targetChangeType) {
-                                TargetChange.TargetChangeType.CURRENT -> {
-                                    hasCurrent = true
-                                    backoffMs = 1000L
-                                    consecutiveUnauth = 0
-                                    trySend(currentDocs.values.toList())
-                                    dirty = false
-                                }
-                                TargetChange.TargetChangeType.NO_CHANGE -> {
-                                    if (tc.hasCause()) {
-                                        val status = Status.fromCodeValue(tc.cause.code)
-                                        if (status.code == Status.Code.UNAUTHENTICATED) {
-                                            streamClosed.complete(StreamCloseReason.Unauthenticated)
-                                            return
-                                        }
-                                    }
-                                    if (hasCurrent && dirty) {
-                                        trySend(currentDocs.values.toList())
-                                        dirty = false
-                                    }
-                                }
-                                TargetChange.TargetChangeType.REMOVE -> {
-                                    val status = if (tc.hasCause()) Status.fromCodeValue(tc.cause.code) else Status.UNKNOWN
-                                    if (status.code == Status.Code.UNAUTHENTICATED) {
-                                        streamClosed.complete(StreamCloseReason.Unauthenticated)
-                                    } else {
-                                        streamClosed.complete(StreamCloseReason.Error(status.asRuntimeException()))
-                                    }
-                                    return
-                                }
-                                TargetChange.TargetChangeType.RESET -> {
-                                    currentDocs.clear()
-                                    dirty = true
-                                }
-                                else -> {}
-                            }
-                        }
-                        ListenResponse.ResponseTypeCase.DOCUMENT_CHANGE -> {
-                            val dc = resp.documentChange
-                            val doc = toFirestoreDoc(dc.document, projectId)
-                            currentDocs[doc.path] = doc
-                            dirty = true
-                            if (hasCurrent) {
-                                trySend(currentDocs.values.toList())
-                                dirty = false
-                            }
-                        }
-                        ListenResponse.ResponseTypeCase.DOCUMENT_DELETE -> {
-                            val docName = resp.documentDelete.document
-                            val relPath = toRelativeDocPath(docName, projectId)
-                            currentDocs.remove(relPath)
-                            dirty = true
-                            if (hasCurrent) {
-                                trySend(currentDocs.values.toList())
-                                dirty = false
-                            }
-                        }
-                        ListenResponse.ResponseTypeCase.DOCUMENT_REMOVE -> {
-                            val docName = resp.documentRemove.document
-                            val relPath = toRelativeDocPath(docName, projectId)
-                            currentDocs.remove(relPath)
-                            dirty = true
-                            if (hasCurrent) {
-                                trySend(currentDocs.values.toList())
-                                dirty = false
-                            }
-                        }
-                        else -> {}
-                    }
-                }
-
-                override fun onError(t: Throwable) {
-                    val status = Status.fromThrowable(t)
-                    when (status.code) {
-                        Status.Code.UNAUTHENTICATED -> {
-                            streamClosed.complete(StreamCloseReason.Unauthenticated)
-                        }
-                        Status.Code.UNAVAILABLE -> {
-                            streamClosed.complete(StreamCloseReason.Unavailable)
-                        }
-                        else -> {
-                            streamClosed.complete(StreamCloseReason.Error(t))
-                        }
-                    }
-                }
-
-                override fun onCompleted() {
-                    streamClosed.complete(StreamCloseReason.Completed)
-                }
-            }
-
-            try {
-                val reqObserver = stub.listen(responseObserver)
-                activeRequestObserver = reqObserver
-
+        return listenWithReducer(
+            buildTarget = { resumeToken ->
                 val fromSelector = StructuredQuery.CollectionSelector.newBuilder()
                     .setCollectionId(query.collectionId)
                     .setAllDescendants(query.allDescendants)
@@ -568,14 +287,137 @@ class FirestoreGrpcClient(
                     .setTargetId(1)
                     .setQuery(queryTarget)
 
-                val token = resumeToken
-                if (token != null && !token.isEmpty) {
-                    targetBuilder.setResumeToken(token)
+                if (resumeToken != null && !resumeToken.isEmpty) {
+                    targetBuilder.setResumeToken(resumeToken)
+                }
+                targetBuilder.build()
+            },
+            reducerFactory = { QueryListenReducer() }
+        )
+    }
+
+    private fun <T> listenWithReducer(
+        buildTarget: (resumeToken: ByteString?) -> Target,
+        reducerFactory: () -> ListenReducer<T>
+    ): Flow<T> = channelFlow {
+        val databasePath = "projects/$projectId/databases/(default)"
+
+        var resumeToken: ByteString? = null
+        var backoffMs = 1000L
+        var forceRefreshNext = false
+        var consecutiveUnauth = 0
+        val reducer = reducerFactory()
+
+        while (isActive) {
+            val metadata = try {
+                getAuthMetadata(forceRefreshNext)
+            } catch (e: Exception) {
+                if (!isActive) break
+                delay(backoffMs)
+                backoffMs = (backoffMs * 2).coerceAtMost(30000L)
+                continue
+            }
+            forceRefreshNext = false
+
+            val stub = FirestoreGrpc.newStub(grpcChannel)
+                .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
+
+            val streamClosed = CompletableDeferred<StreamCloseReason>()
+            var activeRequestObserver: StreamObserver<ListenRequest>? = null
+
+            val responseObserver = object : StreamObserver<ListenResponse> {
+                override fun onNext(resp: ListenResponse) {
+                    when (resp.responseTypeCase) {
+                        ListenResponse.ResponseTypeCase.TARGET_CHANGE -> {
+                            val tc = resp.targetChange
+                            if (tc.resumeToken != null && !tc.resumeToken.isEmpty) {
+                                resumeToken = tc.resumeToken
+                            }
+                            when (tc.targetChangeType) {
+                                TargetChange.TargetChangeType.CURRENT -> {
+                                    backoffMs = 1000L
+                                    consecutiveUnauth = 0
+                                    reducer.onCurrent()
+                                    emitSnapshot()
+                                }
+                                TargetChange.TargetChangeType.NO_CHANGE -> {
+                                    if (tc.hasCause()) {
+                                        val status = Status.fromCodeValue(tc.cause.code)
+                                        if (status.code == Status.Code.UNAUTHENTICATED) {
+                                            streamClosed.complete(StreamCloseReason.Unauthenticated)
+                                            return
+                                        }
+                                    }
+                                    reducer.onGlobalSnapshot()
+                                    emitSnapshot()
+                                }
+                                TargetChange.TargetChangeType.REMOVE -> {
+                                    val status = if (tc.hasCause()) Status.fromCodeValue(tc.cause.code) else Status.UNKNOWN
+                                    if (status.code == Status.Code.UNAUTHENTICATED) {
+                                        streamClosed.complete(StreamCloseReason.Unauthenticated)
+                                    } else {
+                                        streamClosed.complete(StreamCloseReason.Error(status.asRuntimeException()))
+                                    }
+                                    return
+                                }
+                                TargetChange.TargetChangeType.RESET -> {
+                                    reducer.onReset()
+                                    emitSnapshot()
+                                }
+                                else -> {}
+                            }
+                        }
+                        ListenResponse.ResponseTypeCase.DOCUMENT_CHANGE -> {
+                            val dc = resp.documentChange
+                            val doc = toFirestoreDoc(dc.document, projectId)
+                            reducer.onDocumentChanged(doc)
+                            emitSnapshot()
+                        }
+                        ListenResponse.ResponseTypeCase.DOCUMENT_DELETE -> {
+                            val docName = resp.documentDelete.document
+                            val relPath = toRelativeDocPath(docName, projectId)
+                            reducer.onDocumentGone(relPath)
+                            emitSnapshot()
+                        }
+                        ListenResponse.ResponseTypeCase.DOCUMENT_REMOVE -> {
+                            val docName = resp.documentRemove.document
+                            val relPath = toRelativeDocPath(docName, projectId)
+                            reducer.onDocumentGone(relPath)
+                            emitSnapshot()
+                        }
+                        else -> {}
+                    }
                 }
 
+                private fun emitSnapshot() {
+                    val snapshot = reducer.takeSnapshot()
+                    if (snapshot is Snapshot.Emit) {
+                        trySend(snapshot.value)
+                    }
+                }
+
+                override fun onError(t: Throwable) {
+                    val status = Status.fromThrowable(t)
+                    when (status.code) {
+                        Status.Code.UNAUTHENTICATED -> streamClosed.complete(StreamCloseReason.Unauthenticated)
+                        Status.Code.UNAVAILABLE -> streamClosed.complete(StreamCloseReason.Unavailable)
+                        else -> streamClosed.complete(StreamCloseReason.Error(t))
+                    }
+                }
+
+                override fun onCompleted() {
+                    streamClosed.complete(StreamCloseReason.Completed)
+                }
+            }
+
+            try {
+                val reqObserver = stub.listen(responseObserver)
+                activeRequestObserver = reqObserver
+
+                val target = buildTarget(resumeToken)
                 val listenReq = ListenRequest.newBuilder()
                     .setDatabase(databasePath)
-                    .setAddTarget(targetBuilder.build())
+                    .setAddTarget(target)
                     .build()
 
                 reqObserver.onNext(listenReq)
@@ -591,9 +433,7 @@ class FirestoreGrpcClient(
                         backoffMs = action.nextBackoffMs
                     }
                     is ReconnectAction.Fail -> {
-                        if (isActive) {
-                            close(action.throwable)
-                        }
+                        if (isActive) close(action.throwable)
                         break
                     }
                 }

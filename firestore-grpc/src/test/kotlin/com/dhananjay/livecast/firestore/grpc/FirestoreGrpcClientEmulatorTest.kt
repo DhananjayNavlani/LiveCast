@@ -22,11 +22,13 @@ class FirestoreGrpcClientEmulatorTest {
         tokenProvider: suspend (forceRefresh: Boolean) -> String? = { "owner" }
     ): FirestoreGrpcClient {
         return FirestoreGrpcClient(
-            projectId = "demo-livecast",
-            tokenProvider = tokenProvider,
-            host = "localhost",
-            port = 8080,
-            plaintext = true
+            config = FirestoreConnectionConfig(
+                projectId = "demo-livecast",
+                host = "localhost",
+                port = 8080,
+                plaintext = true
+            ),
+            tokenProvider = tokenProvider
         )
     }
 
