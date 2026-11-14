@@ -8,7 +8,7 @@ import kotlinx.coroutines.cancel
 
 interface AgentComponent {
     fun start(scope: CoroutineScope)
-    fun stop()
+    fun stop(reportOff: Boolean = true)
 }
 
 interface HostAgentControl {
@@ -27,9 +27,7 @@ class HostAgent(
     fun start() {
         if (started) return
         started = true
-        val job = SupervisorJob()
-        appScope.coroutineContext[Job]?.invokeOnCompletion { job.cancel() }
-        val scope = CoroutineScope(job + appScope.coroutineContext.minusKey(Job))
+        val scope = CoroutineScope(SupervisorJob(appScope.coroutineContext[Job]))
         agentScope = scope
         for (component in components) {
             try {
@@ -41,12 +39,12 @@ class HostAgent(
     }
 
     @Synchronized
-    fun stop() {
+    fun stop(reportOff: Boolean = true) {
         if (!started) return
         started = false
         for (component in components) {
             try {
-                component.stop()
+                component.stop(reportOff)
             } catch (t: Throwable) {
                 Log.w("HostAgent", "Failed to stop component ${component::class.simpleName}", t)
             }
@@ -58,7 +56,7 @@ class HostAgent(
     @Synchronized
     override fun restartIfRunning() {
         if (!started) return
-        stop()
+        stop(reportOff = false)
         start()
     }
 }

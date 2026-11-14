@@ -8,8 +8,10 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentOffNoticeCheckerTest {
 
-    private class FakeEnrollmentState(var groupId: String? = "grp1") : EnrollmentState {
-        override suspend fun currentGroupId(): String? = groupId
+    private class FakeEnrollmentState(
+        var enrollmentStatus: EnrollmentStatus = EnrollmentStatus.Enrolled("grp1")
+    ) : EnrollmentState {
+        override suspend fun status(): EnrollmentStatus = enrollmentStatus
     }
 
     private class FakeDeviceStatusSource(
@@ -40,7 +42,7 @@ class AgentOffNoticeCheckerTest {
 
     @Test
     fun enrolledOffShows() = runTest {
-        val enrollment = FakeEnrollmentState("grp1")
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.Enrolled("grp1"))
         val status = FakeDeviceStatusSource(accessibility = false)
         val notifications = FakeAgentNotifications()
         val checker = AgentOffNoticeChecker(enrollment, status, notifications)
@@ -52,7 +54,7 @@ class AgentOffNoticeCheckerTest {
 
     @Test
     fun onDoesNotShow() = runTest {
-        val enrollment = FakeEnrollmentState("grp1")
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.Enrolled("grp1"))
         val status = FakeDeviceStatusSource(accessibility = true)
         val notifications = FakeAgentNotifications()
         val checker = AgentOffNoticeChecker(enrollment, status, notifications)
@@ -64,7 +66,7 @@ class AgentOffNoticeCheckerTest {
 
     @Test
     fun notEnrolledDoesNotShow() = runTest {
-        val enrollment = FakeEnrollmentState(groupId = null)
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.NotEnrolled)
         val status = FakeDeviceStatusSource(accessibility = false)
         val notifications = FakeAgentNotifications()
         val checker = AgentOffNoticeChecker(enrollment, status, notifications)

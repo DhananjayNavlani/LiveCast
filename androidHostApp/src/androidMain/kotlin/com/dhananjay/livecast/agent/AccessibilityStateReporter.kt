@@ -15,11 +15,15 @@ class AccessibilityStateReporter(
 ) : AgentComponent {
 
     private var startJob: Job? = null
+    private var stopJob: Job? = null
 
     override fun start(scope: CoroutineScope) {
+        val prev = stopJob
         startJob = scope.launch {
+            prev?.join()
+            val enrollmentStatus = enrollment.awaitStatus()
+            if (enrollmentStatus !is EnrollmentStatus.Enrolled) return@launch
             val deviceId = identity.deviceId ?: return@launch
-            if (enrollment.currentGroupId() == null) return@launch
             writer.writeStatus(
                 deviceId = deviceId,
                 accessibilityOn = true,
@@ -30,18 +34,21 @@ class AccessibilityStateReporter(
         }
     }
 
-    override fun stop() {
+    override fun stop(reportOff: Boolean) {
         startJob?.cancel()
         startJob = null
-        appScope.launch {
-            val deviceId = identity.deviceId ?: return@launch
-            if (enrollment.currentGroupId() == null) return@launch
-            writer.writeStatus(
-                deviceId = deviceId,
-                accessibilityOn = false,
-                notificationsOn = status.notificationsOn()
-            ).onFailure {
-                Log.w("AccessibilityStateReporter", "Failed to report accessibility off for $deviceId", it)
+        if (reportOff) {
+            stopJob = appScope.launch {
+                val enrollmentStatus = enrollment.status()
+                if (enrollmentStatus is EnrollmentStatus.NotEnrolled) return@launch
+                val deviceId = identity.deviceId ?: return@launch
+                writer.writeStatus(
+                    deviceId = deviceId,
+                    accessibilityOn = false,
+                    notificationsOn = status.notificationsOn()
+                ).onFailure {
+                    Log.w("AccessibilityStateReporter", "Failed to report accessibility off for $deviceId", it)
+                }
             }
         }
     }

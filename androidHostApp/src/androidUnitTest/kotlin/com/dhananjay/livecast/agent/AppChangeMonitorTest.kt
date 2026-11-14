@@ -16,14 +16,18 @@ class AppChangeMonitorTest {
 
     private class FakeDeviceIdentity(override var deviceId: String? = "dev1") : DeviceIdentity
 
-    private class FakeEnrollmentState(var groupId: String? = "grp1") : EnrollmentState {
-        override suspend fun currentGroupId(): String? = groupId
+    private class FakeEnrollmentState(
+        var enrollmentStatus: EnrollmentStatus = EnrollmentStatus.Enrolled("grp1")
+    ) : EnrollmentState {
+        override suspend fun status(): EnrollmentStatus = enrollmentStatus
     }
 
     private class FakeInstalledAppsSource(
         var apps: List<InstalledApp> = emptyList()
     ) : InstalledAppsSource {
         override fun userApps(): List<InstalledApp> = apps
+        override fun app(packageName: String): InstalledApp? =
+            apps.firstOrNull { it.packageName == packageName }
     }
 
     private class FakeAppBaselineStore(
@@ -72,9 +76,9 @@ class AppChangeMonitorTest {
     }
 
     @Test
-    fun notEnrolledClearsBaselineOnly() = runTest {
+    fun notEnrolledDoesNothing() = runTest {
         val identity = FakeDeviceIdentity("dev1")
-        val enrollment = FakeEnrollmentState(groupId = null)
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.NotEnrolled)
         val apps = FakeInstalledAppsSource(listOf(InstalledApp("com.a", "A", 1000L)))
         val baseline = FakeAppBaselineStore(mapOf("com.a" to "A"))
         val writer = FakeAppEventWriter()
@@ -85,16 +89,17 @@ class AppChangeMonitorTest {
         monitor.start(this)
         advanceUntilIdle()
 
-        assertEquals(1, baseline.clearCalls)
-        assertNull(baseline.baseline)
+        assertEquals(0, baseline.clearCalls)
+        assertEquals(mapOf("com.a" to "A"), baseline.baseline)
         assertNull(registrar.callback)
         assertTrue(writer.events.isEmpty())
+        monitor.stop()
     }
 
     @Test
     fun startWritesDiffAndSavesBaseline() = runTest {
         val identity = FakeDeviceIdentity("dev1")
-        val enrollment = FakeEnrollmentState(groupId = "grp1")
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.Enrolled("grp1"))
         val apps = FakeInstalledAppsSource(
             listOf(
                 InstalledApp("com.a", "A", 1000L),
@@ -118,12 +123,13 @@ class AppChangeMonitorTest {
         assertEquals("B", event.label)
         assertEquals(1500L, event.atEpochMs)
         assertEquals(mapOf("com.a" to "A", "com.b" to "B"), baseline.baseline)
+        monitor.stop()
     }
 
     @Test
     fun startRegistersReceiver() = runTest {
         val identity = FakeDeviceIdentity("dev1")
-        val enrollment = FakeEnrollmentState(groupId = "grp1")
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.Enrolled("grp1"))
         val apps = FakeInstalledAppsSource()
         val baseline = FakeAppBaselineStore()
         val writer = FakeAppEventWriter()
@@ -135,12 +141,13 @@ class AppChangeMonitorTest {
         advanceUntilIdle()
 
         assertNotNull(registrar.callback)
+        monitor.stop()
     }
 
     @Test
     fun broadcastWritesAndUpdatesBaseline() = runTest {
         val identity = FakeDeviceIdentity("dev1")
-        val enrollment = FakeEnrollmentState(groupId = "grp1")
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.Enrolled("grp1"))
         val apps = FakeInstalledAppsSource(listOf(InstalledApp("com.a", "A", 1000L)))
         val baseline = FakeAppBaselineStore(mapOf("com.a" to "A"))
         val writer = FakeAppEventWriter()
@@ -168,12 +175,13 @@ class AppChangeMonitorTest {
         assertEquals("B", event.label)
         assertEquals(2500L, event.atEpochMs)
         assertEquals(mapOf("com.a" to "A", "com.b" to "B"), baseline.baseline)
+        monitor.stop()
     }
 
     @Test
     fun stopUnregisters() = runTest {
         val identity = FakeDeviceIdentity("dev1")
-        val enrollment = FakeEnrollmentState(groupId = "grp1")
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.Enrolled("grp1"))
         val apps = FakeInstalledAppsSource()
         val baseline = FakeAppBaselineStore()
         val writer = FakeAppEventWriter()
@@ -188,5 +196,68 @@ class AppChangeMonitorTest {
         advanceUntilIdle()
 
         assertEquals(1, registrar.unregisterCalls)
+    }
+
+    @Test
+    fun broadcastAfterStopIgnored() = runTest {
+        val identity = FakeDeviceIdentity("dev1")
+        val enrollment = FakeEnrollmentState(EnrollmentStatus.Enrolled("grp1"))
+        val apps = FakeInstalledAppsSource(listOf(InstalledApp("com.a", "A", 1000L)))
+        val baseline = FakeAppBaselineStore(mapOf("com.a" to "A"))
+        val writer = FakeAppEventWriter()
+        val registrar = FakePackageChangeRegistrar()
+        val clock = FakeWallClock()
+
+        val monitor = AppChangeMonitor(identity, enrollment, apps, baseline, writer, registrar, clock)
+        monitor.start(this)
+        advanceUntilIdle()
+
+        val capturedCallback = registrar.callback
+        assertNotNull(capturedCallback)
+
+        monitor.stop()
+        advanceUntilIdle()
+
+        apps.apps = listOf(
+            InstalledApp("com.a", "A", 1000L),
+            InstalledApp("com.b", "B", 2500L)
+        )
+        capturedCallback.invoke(PackageChange("com.b", added = true, replacing = false, atEpochMs = 2500L))
+        advanceUntilIdle()
+
+        assertTrue(writer.events.isEmpty())
+    }
+
+    @Test
+    fun unknownThenEnrolledStartsAfterRetry() = runTest {
+        val identity = FakeDeviceIdentity("dev1")
+        var attempts = 0
+        val enrollment = object : EnrollmentState {
+            override suspend fun status(): EnrollmentStatus {
+                attempts++
+                return if (attempts == 1) EnrollmentStatus.Unknown else EnrollmentStatus.Enrolled("grp1")
+            }
+        }
+        val apps = FakeInstalledAppsSource(
+            listOf(
+                InstalledApp("com.a", "A", 1000L),
+                InstalledApp("com.b", "B", 1500L)
+            )
+        )
+        val baseline = FakeAppBaselineStore(mapOf("com.a" to "A"))
+        val writer = FakeAppEventWriter()
+        val registrar = FakePackageChangeRegistrar()
+        val clock = FakeWallClock(2000L)
+
+        val monitor = AppChangeMonitor(identity, enrollment, apps, baseline, writer, registrar, clock)
+        monitor.start(this)
+        advanceUntilIdle()
+
+        assertEquals(1, writer.events.size)
+        val (deviceId, event) = writer.events.first()
+        assertEquals("dev1", deviceId)
+        assertEquals("com.b", event.packageName)
+        assertNotNull(registrar.callback)
+        monitor.stop()
     }
 }

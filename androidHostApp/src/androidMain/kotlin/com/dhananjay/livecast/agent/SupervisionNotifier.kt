@@ -7,7 +7,8 @@ import com.dhananjay.livecast.protocol.GroupRules
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class SupervisionNotifier(
@@ -18,31 +19,54 @@ class SupervisionNotifier(
 ) : AgentComponent {
 
     private var startJob: Job? = null
+    private var stopJob: Job? = null
 
     override fun start(scope: CoroutineScope) {
+        val prev = stopJob
         startJob = scope.launch {
-            val groupId = enrollment.currentGroupId() ?: return@launch
-            try {
-                val supervisors = members.observeSupervisors(groupId).first()
-                val owner = supervisors.firstOrNull { it.role == GroupRole.OWNER }
-                if (owner != null) {
-                    val name = GroupRules.displayName(owner)
-                    notifications.showSupervised(name)
+            prev?.join()
+            val enrollmentStatus = enrollment.awaitStatus()
+            if (enrollmentStatus !is EnrollmentStatus.Enrolled) return@launch
+            val groupId = enrollmentStatus.groupId
+
+            // Before the first name is known, notifications.cancel() any stale off notice
+            notifications.cancel()
+
+            val retryDelaysMs = listOf(15_000L, 30_000L, 60_000L, 120_000L, 240_000L)
+            var attempt = 0
+            while (isActive) {
+                try {
+                    members.observeSupervisors(groupId).collect { supervisors ->
+                        if (supervisors.isEmpty()) return@collect
+                        val chosen = supervisors.firstOrNull { it.role == GroupRole.OWNER }
+                            ?: supervisors.first()
+                        notifications.showSupervised(GroupRules.displayName(chosen))
+                    }
+                    break
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (t: Throwable) {
+                    Log.w("SupervisionNotifier", "Error observing supervisors for group $groupId", t)
+                    if (attempt < retryDelaysMs.size) {
+                        delay(retryDelaysMs[attempt])
+                        attempt++
+                    } else {
+                        break
+                    }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (t: Throwable) {
-                Log.w("SupervisionNotifier", "Failed to resolve owner for group $groupId", t)
             }
         }
     }
 
-    override fun stop() {
+    override fun stop(reportOff: Boolean) {
         startJob?.cancel()
         startJob = null
-        appScope.launch {
-            val groupId = enrollment.currentGroupId() ?: return@launch
-            notifications.showAccessibilityOff()
+        if (reportOff) {
+            stopJob = appScope.launch {
+                val enrollmentStatus = enrollment.status()
+                if (enrollmentStatus is EnrollmentStatus.NotEnrolled) return@launch
+                notifications.showAccessibilityOff()
+            }
         }
     }
 }

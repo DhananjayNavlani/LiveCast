@@ -17,6 +17,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,6 +26,7 @@ import org.json.JSONObject
 
 interface InstalledAppsSource {
     fun userApps(): List<InstalledApp>
+    fun app(packageName: String): InstalledApp?
 }
 
 interface AppBaselineStore {
@@ -74,6 +76,29 @@ class AndroidInstalledAppsSource(
                 firstInstallTimeMs = firstInstallTime
             )
         }
+    }
+
+    override fun app(packageName: String): InstalledApp? {
+        val pm = context.packageManager
+        if (packageName == context.packageName) return null
+        val packageInfo = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(packageName, 0)
+            }
+        } catch (_: Exception) {
+            return null
+        }
+        val appInfo = packageInfo.applicationInfo ?: return null
+        if ((appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0) return null
+        val label = appInfo.loadLabel(pm).toString()
+        return InstalledApp(
+            packageName = packageInfo.packageName,
+            label = label,
+            firstInstallTimeMs = packageInfo.firstInstallTime
+        )
     }
 }
 
@@ -146,6 +171,7 @@ class AndroidPackageChangeRegistrar(
     private val context: Context,
     private val clock: WallClock
 ) : PackageChangeRegistrar {
+    @Volatile
     private var receiver: BroadcastReceiver? = null
 
     override fun register(onChange: (PackageChange) -> Unit) {
@@ -197,20 +223,21 @@ class AppChangeMonitor(
 ) : AgentComponent {
 
     private val mutex = Mutex()
-    private var monitorJob: Job? = null
+    private var startJob: Job? = null
+    private var stopJob: Job? = null
+    @Volatile
     private var currentGroupId: String? = null
 
     override fun start(scope: CoroutineScope) {
-        monitorJob = scope.launch {
+        val prev = stopJob
+        startJob = scope.launch {
+            prev?.join()
+            val enrollmentStatus = enrollment.awaitStatus()
+            if (enrollmentStatus !is EnrollmentStatus.Enrolled) return@launch
+            val groupId = enrollmentStatus.groupId
             mutex.withLock {
-                val deviceId = identity.deviceId
-                val groupId = enrollment.currentGroupId()
-                if (deviceId == null || groupId == null) {
-                    baseline.clear()
-                    return@withLock
-                }
-                currentGroupId = groupId
-
+                ensureActive()
+                val deviceId = identity.deviceId ?: return@withLock
                 val currentBaseline = baseline.load()
                 val installed = apps.userApps()
                 val diff = AppChangeDiff.onStart(
@@ -224,6 +251,8 @@ class AppChangeMonitor(
                 }
                 baseline.save(diff.baseline)
 
+                ensureActive()
+                currentGroupId = groupId
                 registrar.register { change ->
                     scope.launch {
                         mutex.withLock {
@@ -231,7 +260,7 @@ class AppChangeMonitor(
                             val activeDeviceId = identity.deviceId ?: return@withLock
                             val activeBaseline = baseline.load() ?: emptyMap()
                             val app = if (change.added) {
-                                apps.userApps().firstOrNull { it.packageName == change.packageName }
+                                apps.app(change.packageName)
                             } else {
                                 null
                             }
@@ -252,10 +281,10 @@ class AppChangeMonitor(
         }
     }
 
-    override fun stop() {
-        registrar.unregister()
+    override fun stop(reportOff: Boolean) {
         currentGroupId = null
-        monitorJob?.cancel()
-        monitorJob = null
+        registrar.unregister()
+        startJob?.cancel()
+        startJob = null
     }
 }

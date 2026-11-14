@@ -10,26 +10,60 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import java.util.concurrent.TimeoutException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 
+sealed interface EnrollmentStatus {
+    data class Enrolled(val groupId: String) : EnrollmentStatus
+    data object NotEnrolled : EnrollmentStatus
+    data object Unknown : EnrollmentStatus
+}
+
 interface EnrollmentState {
-    suspend fun currentGroupId(): String?
+    suspend fun status(): EnrollmentStatus
+}
+
+suspend fun EnrollmentState.currentGroupId(): String? = when (val s = status()) {
+    is EnrollmentStatus.Enrolled -> s.groupId
+    EnrollmentStatus.NotEnrolled, EnrollmentStatus.Unknown -> null
+}
+
+suspend fun EnrollmentState.awaitStatus(
+    retryDelaysMs: List<Long> = listOf(15_000L, 30_000L, 60_000L, 120_000L, 240_000L)
+): EnrollmentStatus {
+    var s = status()
+    if (s !is EnrollmentStatus.Unknown) return s
+    for (delayMs in retryDelaysMs) {
+        delay(delayMs)
+        s = status()
+        if (s !is EnrollmentStatus.Unknown) return s
+    }
+    return EnrollmentStatus.Unknown
 }
 
 class DeviceRegistryEnrollmentState(
     private val identity: DeviceIdentity,
     private val registry: DeviceRegistry
 ) : EnrollmentState {
-    override suspend fun currentGroupId(): String? {
-        val deviceId = identity.deviceId ?: return null
-        return withTimeoutOrNull(10_000L) {
-            try {
-                registry.observeDevice(deviceId).first()?.groupId
-            } catch (_: Exception) {
-                null
-            }
+    override suspend fun status(): EnrollmentStatus {
+        val deviceId = identity.deviceId ?: return EnrollmentStatus.NotEnrolled
+        return try {
+            withTimeoutOrNull(10_000L) {
+                val device = registry.observeDevice(deviceId).first()
+                val groupId = device?.groupId
+                if (groupId != null) {
+                    EnrollmentStatus.Enrolled(groupId)
+                } else {
+                    EnrollmentStatus.NotEnrolled
+                }
+            } ?: EnrollmentStatus.Unknown
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            EnrollmentStatus.Unknown
         }
     }
 }

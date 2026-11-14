@@ -17,7 +17,8 @@ class AgentOffNoticeChecker(
     private val notifications: AgentNotifications
 ) {
     suspend fun check() {
-        val groupId = enrollment.currentGroupId() ?: return
+        val enrollmentStatus = enrollment.status()
+        if (enrollmentStatus is EnrollmentStatus.NotEnrolled) return
         if (!status.accessibilityOn()) {
             notifications.showAccessibilityOff()
         }

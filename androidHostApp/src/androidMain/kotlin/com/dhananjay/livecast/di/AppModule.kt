@@ -127,7 +127,7 @@ val appModule = module {
     single<EnrollmentState> { DeviceRegistryEnrollmentState(get(), get()) }
     single<PushTokenStore> { FirestorePushTokenStore(get()) }
     single<PushTokenSource> { FirebasePushTokenSource(get()) }
-    single { PushTokenRegistry(get(), get(), get(), get()) } bind EnrollmentListener::class
+    single { PushTokenRegistry(get(), get(), get(), get()) }
     single<AgentNotifications> { AndroidAgentNotifications(androidContext()) }
     single { CheckResponder(get(), get(), get(), get()) }
 

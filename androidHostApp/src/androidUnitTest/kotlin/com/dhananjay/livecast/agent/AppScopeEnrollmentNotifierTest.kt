@@ -8,6 +8,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -63,10 +64,11 @@ class AppScopeEnrollmentNotifierTest {
         val recording = RecordingListener()
         val notifier = AppScopeEnrollmentNotifier(listOf(recording), appScope)
 
-        val callerScope = CoroutineScope(Job())
+        val callerScope = CoroutineScope(Job() + StandardTestDispatcher(testScheduler))
         callerScope.launch {
             notifier.notifyEnrolled("uid1", "g1")
         }
+        runCurrent()
         callerScope.cancel()
 
         advanceUntilIdle()

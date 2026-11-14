@@ -17,7 +17,8 @@ class PushTokenRegistryTest {
     private class FakeDeviceIdentity(override var deviceId: String? = "dev1") : DeviceIdentity
 
     private class FakeEnrollmentState(var groupId: String? = "grp1") : EnrollmentState {
-        override suspend fun currentGroupId(): String? = groupId
+        override suspend fun status(): EnrollmentStatus =
+            groupId?.let { EnrollmentStatus.Enrolled(it) } ?: EnrollmentStatus.NotEnrolled
     }
 
     private class FakePushTokenStore : PushTokenStore {
