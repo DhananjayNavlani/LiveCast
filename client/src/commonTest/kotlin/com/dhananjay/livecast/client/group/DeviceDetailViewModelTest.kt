@@ -1,11 +1,14 @@
 package com.dhananjay.livecast.client.group
 
+import androidx.lifecycle.ViewModelStore
 import com.dhananjay.livecast.protocol.AppEvent
 import com.dhananjay.livecast.protocol.AppEventType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -135,5 +138,55 @@ class DeviceDetailViewModelTest {
         assertFalse(viewModel.state.value.loading)
         assertEquals("Network dropped", viewModel.state.value.error)
         assertTrue(viewModel.state.value.events.isEmpty())
+    }
+
+    @Test
+    fun clearedViewModelStopsCollecting() = runTest(testDispatcher) {
+        var cancelled = false
+        val repo = object : AppEventRepository {
+            override fun observeRecent(deviceId: String, groupId: String, limit: Int): Flow<List<AppEvent>> {
+                return callbackFlow {
+                    awaitClose {
+                        cancelled = true
+                    }
+                }
+            }
+        }
+
+        val store = ViewModelStore()
+        val viewModel = DeviceDetailViewModel(deviceId = "d1", groupId = "g1", events = repo)
+        store.put("test_vm", viewModel)
+        runCurrent()
+
+        assertFalse(cancelled)
+
+        store.clear()
+        runCurrent()
+
+        assertTrue(cancelled, "Expected repository flow collection to be cancelled after ViewModelStore.clear()")
+    }
+
+    @Test
+    fun messageContainingPermissionDeniedIsNotAccessLost() = runTest(testDispatcher) {
+        val repo = FakeAppEventRepository()
+        repo.flowToReturn = flow {
+            throw RuntimeException("PERMISSION_DENIED from some other source")
+        }
+
+        val viewModel = DeviceDetailViewModel(deviceId = "d1", groupId = "g1", events = repo)
+        runCurrent()
+
+        assertFalse(viewModel.state.value.loading)
+        assertEquals("PERMISSION_DENIED from some other source", viewModel.state.value.error)
+    }
+
+    @Test
+    fun unsupportedRepositoryShowsMessage() = runTest(testDispatcher) {
+        val repo = UnsupportedAppEventRepository("Custom unsupported message")
+        val viewModel = DeviceDetailViewModel(deviceId = "d1", groupId = "g1", events = repo)
+        runCurrent()
+
+        assertFalse(viewModel.state.value.loading)
+        assertEquals("Custom unsupported message", viewModel.state.value.error)
     }
 }

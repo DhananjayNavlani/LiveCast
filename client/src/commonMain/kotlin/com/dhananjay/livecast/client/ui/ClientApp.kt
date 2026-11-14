@@ -1,11 +1,13 @@
 package com.dhananjay.livecast.client.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.dhananjay.livecast.auth.LoginViewModel
 import com.dhananjay.livecast.client.group.ClientGate
 import com.dhananjay.livecast.client.group.DeviceDetailScreen
@@ -20,7 +22,7 @@ import org.koin.compose.viewmodel.koinViewModel
 private sealed interface ClientScreen {
     data object MyDevices : ClientScreen
     data object GroupManagement : ClientScreen
-    data class DeviceDetail(val device: HostDevice) : ClientScreen
+    data class DeviceDetail(val device: HostDevice, val groupId: String) : ClientScreen
     data class Viewer(val device: HostDevice) : ClientScreen
 }
 
@@ -58,7 +60,12 @@ fun ClientApp(
                     is ClientScreen.MyDevices -> {
                         MyDevicesScreen(
                             onManageGroups = { currentScreen = ClientScreen.GroupManagement },
-                            onDeviceClick = { device -> currentScreen = ClientScreen.DeviceDetail(device) },
+                            onDeviceClick = { device ->
+                                val groupId = device.groupId
+                                if (groupId != null) {
+                                    currentScreen = ClientScreen.DeviceDetail(device, groupId)
+                                }
+                            },
                             onSignOut = { viewModel.signOut() }
                         )
                     }
@@ -70,19 +77,31 @@ fun ClientApp(
                     }
 
                     is ClientScreen.DeviceDetail -> {
-                        DeviceDetailScreen(
-                            deviceId = screen.device.id,
-                            groupId = screen.device.groupId ?: "",
-                            deviceName = screen.device.displayName,
-                            onBack = { currentScreen = ClientScreen.MyDevices },
-                            onOpenViewer = { currentScreen = ClientScreen.Viewer(screen.device) }
-                        )
+                        val uid = uiState.user?.id ?: ""
+                        CompositionLocalProvider(
+                            LocalViewModelStoreOwner provides rememberScopedViewModelStoreOwner(uid, screen.device.id, screen.groupId)
+                        ) {
+                            DeviceDetailScreen(
+                                deviceId = screen.device.id,
+                                groupId = screen.groupId,
+                                deviceName = screen.device.displayName,
+                                onBack = { currentScreen = ClientScreen.MyDevices },
+                                onOpenViewer = { currentScreen = ClientScreen.Viewer(screen.device) }
+                            )
+                        }
                     }
 
                     is ClientScreen.Viewer -> {
                         ViewerScreen(
                             viewModel = viewModel,
-                            onBack = { currentScreen = ClientScreen.DeviceDetail(screen.device) }
+                            onBack = {
+                                val groupId = screen.device.groupId
+                                if (groupId != null) {
+                                    currentScreen = ClientScreen.DeviceDetail(screen.device, groupId)
+                                } else {
+                                    currentScreen = ClientScreen.MyDevices
+                                }
+                            }
                         )
                     }
                 }

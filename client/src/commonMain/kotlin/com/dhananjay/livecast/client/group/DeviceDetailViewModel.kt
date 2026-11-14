@@ -29,7 +29,7 @@ class DeviceDetailViewModel(
         viewModelScope.launch {
             events.observeRecent(deviceId, groupId)
                 .catch { cause ->
-                    val errorMsg = if (cause.isPermissionDenied()) {
+                    val errorMsg = if (cause is GroupError.AccessLost) {
                         "You no longer have access"
                     } else {
                         cause.message ?: "Unknown error"
@@ -40,15 +40,5 @@ class DeviceDetailViewModel(
                     _state.update { it.copy(loading = false, events = list, error = null) }
                 }
         }
-    }
-
-    private fun Throwable.isPermissionDenied(): Boolean {
-        if (this is GroupError.AccessLost) return true
-        val cls = this::class.simpleName ?: ""
-        if (cls.contains("PermissionDenied", ignoreCase = true)) return true
-        if (message?.contains("PERMISSION_DENIED", ignoreCase = true) == true) return true
-        if (message?.contains("Permission denied", ignoreCase = true) == true) return true
-        val c = cause
-        return c != null && c.isPermissionDenied()
     }
 }

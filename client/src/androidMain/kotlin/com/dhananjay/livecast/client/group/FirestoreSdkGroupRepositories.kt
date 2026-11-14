@@ -30,7 +30,7 @@ import kotlinx.coroutines.tasks.await
 
 private val toMillis: (Any) -> Long? = { (it as? Timestamp)?.toDate()?.time }
 
-private fun Throwable.toGroupError(): Throwable = when {
+internal fun Throwable.toGroupError(): Throwable = when {
     this is FirebaseFirestoreException && code == FirebaseFirestoreException.Code.PERMISSION_DENIED -> GroupError.AccessLost
     this is GroupError -> this
     cause is GroupError -> cause!!

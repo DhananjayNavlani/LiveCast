@@ -44,7 +44,6 @@ fun DeviceDetailScreen(
     onOpenViewer: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DeviceDetailViewModel = koinViewModel(
-        key = "$deviceId-$groupId",
         parameters = { parametersOf(deviceId, groupId) }
     ),
 ) {

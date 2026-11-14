@@ -2,7 +2,6 @@ package com.dhananjay.livecast.client.group
 
 import com.dhananjay.livecast.firestore.grpc.Direction
 import com.dhananjay.livecast.firestore.grpc.DocumentStore
-import com.dhananjay.livecast.firestore.grpc.FirestorePermissionDeniedException
 import com.dhananjay.livecast.firestore.grpc.FirestoreQuery
 import com.dhananjay.livecast.protocol.AppEvent
 import com.dhananjay.livecast.protocol.FirestorePaths
@@ -15,11 +14,6 @@ import kotlinx.coroutines.flow.map
 import java.time.Instant
 
 private val toMillis: (Any) -> Long? = { (it as? Instant)?.toEpochMilli() }
-
-private fun Throwable.toGroupError(): Throwable = when (this) {
-    is FirestorePermissionDeniedException -> GroupError.AccessLost
-    else -> this
-}
 
 class DocumentStoreAppEventRepository(
     private val store: DocumentStore,

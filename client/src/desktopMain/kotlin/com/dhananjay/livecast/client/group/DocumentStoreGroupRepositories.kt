@@ -30,7 +30,7 @@ import java.time.Instant
 
 private val toMillis: (Any) -> Long? = { (it as? Instant)?.toEpochMilli() }
 
-private fun Throwable.toGroupError(): Throwable = when (this) {
+internal fun Throwable.toGroupError(): Throwable = when (this) {
     is FirestorePermissionDeniedException -> GroupError.AccessLost
     else -> this
 }
