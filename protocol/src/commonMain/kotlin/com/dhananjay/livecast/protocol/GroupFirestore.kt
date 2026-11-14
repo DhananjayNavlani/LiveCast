@@ -16,6 +16,18 @@ object GroupFields {
     const val ONLINE = "online"
     const val LAST_SEEN = "lastSeen"
     const val ENROLLED_AT = "enrolledAt"
+    const val ACCESSIBILITY = "accessibility"
+    const val NOTIFICATIONS = "notifications"
+    const val STATUS_AT = "statusAt"
+    const val LAST_CHECK_ID = "lastCheckId"
+    const val LAST_CHECK_AT = "lastCheckAt"
+    const val FCM_TOKEN = "fcmToken"
+    const val UPDATED_AT = "updatedAt"
+    const val TYPE = "type"
+    const val PACKAGE_NAME = "packageName"
+    const val LABEL = "label"
+    const val AT = "at"
+    const val DETECTED_LATE = "detectedLate"
 }
 
 // Mappers take maps whose timestamps the platform already converted to epoch-millis Long (normalizeTimestamps).
@@ -49,10 +61,17 @@ fun groupMemberFrom(groupId: String, emailId: String, data: Map<String, Any?>): 
 fun hostDeviceFrom(id: String, data: Map<String, Any?>): HostDevice? {
     val displayName = data[GroupFields.DISPLAY_NAME] as? String ?: return null
     val model = data[GroupFields.MODEL] as? String ?: return null
+    @Suppress("DEPRECATION")
     val online = data[GroupFields.ONLINE] as? Boolean ?: false
+    @Suppress("DEPRECATION")
     val lastSeenEpochMs = (data[GroupFields.LAST_SEEN] as? Number)?.toLong() ?: 0L
     val groupId = data[GroupFields.GROUP_ID] as? String
     val enrolledAtEpochMs = (data[GroupFields.ENROLLED_AT] as? Number)?.toLong()
+    val accessibility = ToggleState.fromWire(data[GroupFields.ACCESSIBILITY])
+    val notifications = ToggleState.fromWire(data[GroupFields.NOTIFICATIONS])
+    val statusAtEpochMs = (data[GroupFields.STATUS_AT] as? Number)?.toLong()
+    val lastCheckId = data[GroupFields.LAST_CHECK_ID] as? String
+    val lastCheckAtEpochMs = (data[GroupFields.LAST_CHECK_AT] as? Number)?.toLong()
     return HostDevice(
         id = id,
         displayName = displayName,
@@ -61,6 +80,29 @@ fun hostDeviceFrom(id: String, data: Map<String, Any?>): HostDevice? {
         lastSeenEpochMs = lastSeenEpochMs,
         groupId = groupId,
         enrolledAtEpochMs = enrolledAtEpochMs,
+        accessibility = accessibility,
+        notifications = notifications,
+        statusAtEpochMs = statusAtEpochMs,
+        lastCheckId = lastCheckId,
+        lastCheckAtEpochMs = lastCheckAtEpochMs,
+    )
+}
+
+fun appEventFrom(id: String, data: Map<String, Any?>): AppEvent? {
+    val type = AppEventType.fromWire(data[GroupFields.TYPE]) ?: return null
+    val packageName = data[GroupFields.PACKAGE_NAME] as? String ?: return null
+    val label = data[GroupFields.LABEL] as? String ?: ""
+    val atEpochMs = (data[GroupFields.AT] as? Number)?.toLong() ?: return null
+    val detectedLate = data[GroupFields.DETECTED_LATE] as? Boolean ?: false
+    val groupId = data[GroupFields.GROUP_ID] as? String ?: return null
+    return AppEvent(
+        id = id,
+        type = type,
+        packageName = packageName,
+        label = label,
+        atEpochMs = atEpochMs,
+        detectedLate = detectedLate,
+        groupId = groupId,
     )
 }
 
@@ -91,11 +133,45 @@ object GroupWrites {
         GroupFields.HOST_UID to device.id,
         GroupFields.DISPLAY_NAME to device.displayName,
         GroupFields.MODEL to device.model,
-        GroupFields.ONLINE to true,
-        GroupFields.LAST_SEEN to now,
         GroupFields.ENROLLED_AT to now,
     )
 
+    fun statusFields(accessibilityOn: Boolean, notificationsOn: Boolean, now: Any): Map<String, Any?> = mapOf(
+        GroupFields.ACCESSIBILITY to if (accessibilityOn) "on" else "off",
+        GroupFields.NOTIFICATIONS to if (notificationsOn) "on" else "off",
+        GroupFields.STATUS_AT to now,
+    )
+
+    fun checkReplyFields(checkId: String, accessibilityOn: Boolean, notificationsOn: Boolean, now: Any): Map<String, Any?> = mapOf(
+        GroupFields.ACCESSIBILITY to if (accessibilityOn) "on" else "off",
+        GroupFields.NOTIFICATIONS to if (notificationsOn) "on" else "off",
+        GroupFields.STATUS_AT to now,
+        GroupFields.LAST_CHECK_ID to checkId,
+        GroupFields.LAST_CHECK_AT to now,
+    )
+
+    fun pushTokenFields(token: String, now: Any): Map<String, Any?> = mapOf(
+        GroupFields.FCM_TOKEN to token,
+        GroupFields.UPDATED_AT to now,
+    )
+
+    fun appEventFields(
+        type: AppEventType,
+        packageName: String,
+        label: String,
+        at: Any,
+        detectedLate: Boolean,
+        groupId: String,
+    ): Map<String, Any?> = mapOf(
+        GroupFields.TYPE to type.wire,
+        GroupFields.PACKAGE_NAME to packageName,
+        GroupFields.LABEL to label,
+        GroupFields.AT to at,
+        GroupFields.DETECTED_LATE to detectedLate,
+        GroupFields.GROUP_ID to groupId,
+    )
+
+    @Deprecated("Replaced by status and check reply fields")
     fun heartbeatFields(online: Boolean, now: Any): Map<String, Any?> = mapOf(
         GroupFields.ONLINE to online,
         GroupFields.LAST_SEEN to now,

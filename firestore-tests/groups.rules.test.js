@@ -129,8 +129,9 @@ beforeEach(async () => {
         hostUid: 'H',
         displayName: 'Pixel 8',
         model: 'Pixel 8',
-        online: true,
-        lastSeen: now,
+        accessibility: 'on',
+        notifications: 'on',
+        statusAt: now,
         enrolledAt: now,
       });
     });
@@ -440,8 +441,6 @@ test('deviceMemberEnrolls', async () => {
       hostUid: 'H2',
       displayName: 'Pixel 7',
       model: 'Pixel 7',
-      online: true,
-      lastSeen: now,
       enrolledAt: now,
     })
   );
@@ -456,8 +455,6 @@ test('enrollWithoutDeviceMembership', async () => {
       hostUid: 'X',
       displayName: 'X Phone',
       model: 'Pixel X',
-      online: true,
-      lastSeen: now,
       enrolledAt: now,
     })
   );
@@ -472,8 +469,6 @@ test('supervisorEnrollsAsDevice', async () => {
       hostUid: 'S',
       displayName: 'S Phone',
       model: 'Pixel S',
-      online: true,
-      lastSeen: now,
       enrolledAt: now,
     })
   );
@@ -488,8 +483,6 @@ test('enrollOtherUidDoc', async () => {
       hostUid: 'H2',
       displayName: 'H2 Phone',
       model: 'Pixel H2',
-      online: true,
-      lastSeen: now,
       enrolledAt: now,
     })
   );
@@ -516,8 +509,6 @@ test('unverifiedDeviceEnrolls', async () => {
       hostUid: 'U2',
       displayName: 'U2 Phone',
       model: 'Pixel U2',
-      online: true,
-      lastSeen: now,
       enrolledAt: now,
     })
   );
@@ -532,8 +523,6 @@ test('enrollWithExtraField', async () => {
       hostUid: 'H2',
       displayName: 'Pixel 7',
       model: 'Pixel 7',
-      online: true,
-      lastSeen: now,
       enrolledAt: now,
       ownerUid: 'O',
     })
@@ -560,8 +549,9 @@ test('legacyDeviceDocEnrolls', async () => {
         hostUid: 'H2',
         displayName: 'Pixel 7',
         model: 'Pixel 7',
-        online: true,
-        lastSeen: now,
+        accessibility: 'on',
+        notifications: 'on',
+        statusAt: now,
         enrolledAt: now,
       },
       { merge: true }
@@ -574,8 +564,8 @@ test('hostHeartbeat', async () => {
   const now = Timestamp.now();
   await assertSucceeds(
     updateDoc(doc(hDb, 'devices', 'H'), {
-      online: true,
-      lastSeen: now,
+      accessibility: 'on',
+      statusAt: now,
     })
   );
 });
@@ -615,8 +605,8 @@ test('hostHeartbeatAfterRemoval', async () => {
   const now = Timestamp.now();
   await assertSucceeds(
     updateDoc(doc(hDb, 'devices', 'H'), {
-      online: true,
-      lastSeen: now,
+      accessibility: 'on',
+      statusAt: now,
     })
   );
   // Verify groupId is still null
@@ -640,8 +630,6 @@ test('hostReenrollsAfterRemoval', async () => {
       hostUid: 'H',
       displayName: 'Pixel 8',
       model: 'Pixel 8',
-      online: true,
-      lastSeen: now,
       enrolledAt: now,
     })
   );

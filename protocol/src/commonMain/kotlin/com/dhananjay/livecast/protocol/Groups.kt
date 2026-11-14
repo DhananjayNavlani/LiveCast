@@ -38,15 +38,25 @@ data class HostDevice(
     val id: String,
     val displayName: String,
     val model: String,
+    @Deprecated("Replaced by on-demand check and status fields")
     val online: Boolean = false,
+    @Deprecated("Replaced by on-demand check and status fields")
     val lastSeenEpochMs: Long = 0,
     val groupId: String? = null,
     val enrolledAtEpochMs: Long? = null,
+    val accessibility: ToggleState = ToggleState.UNKNOWN,
+    val notifications: ToggleState = ToggleState.UNKNOWN,
+    val statusAtEpochMs: Long? = null,
+    val lastCheckId: String? = null,
+    val lastCheckAtEpochMs: Long? = null,
 )
 
 object GroupRules {
+    @Deprecated("Replaced by on-demand check")
     const val ONLINE_WINDOW_MS = 120_000L
+    @Deprecated("Replaced by on-demand check")
     const val HEARTBEAT_INTERVAL_MS = 45_000L
+    @Deprecated("Replaced by on-demand check")
     const val PRESENCE_TICK_MS = 15_000L
     const val GROUP_NAME_MAX = 60
 
@@ -61,7 +71,9 @@ object GroupRules {
         return if (trimmed.isEmpty() || trimmed.length > GROUP_NAME_MAX) null else trimmed
     }
 
+    @Deprecated("Replaced by on-demand check")
     fun isOnline(device: HostDevice, nowEpochMs: Long): Boolean {
+        @Suppress("DEPRECATION")
         return device.online && (nowEpochMs - device.lastSeenEpochMs <= ONLINE_WINDOW_MS)
     }
 

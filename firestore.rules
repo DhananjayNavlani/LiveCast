@@ -132,16 +132,45 @@ service cloud.firestore {
         && request.auth.uid == d
         && request.resource.data.hostUid == d
         && roleIn(request.resource.data.groupId, ['device'])
-        && request.resource.data.keys().hasAll(['groupId', 'hostUid', 'displayName', 'model', 'online', 'lastSeen', 'enrolledAt'])
-        && request.resource.data.keys().hasOnly(['groupId', 'hostUid', 'displayName', 'model', 'online', 'lastSeen', 'enrolledAt']);
-      allow update: if isDeviceHeartbeat(d) || isDeviceReenroll(d) || isDeviceOwnerRemoval();
+        && request.resource.data.keys().hasAll(['groupId', 'hostUid', 'displayName', 'model', 'enrolledAt'])
+        && request.resource.data.keys().hasOnly(['groupId', 'hostUid', 'displayName', 'model', 'enrolledAt', 'accessibility', 'notifications', 'statusAt'])
+        && (!('accessibility' in request.resource.data) || request.resource.data.accessibility in ['on', 'off'])
+        && (!('notifications' in request.resource.data) || request.resource.data.notifications in ['on', 'off']);
+      allow update: if isDeviceSelfReport(d) || isDeviceReenroll(d) || isDeviceOwnerRemoval();
       allow delete: if false;
+
+      match /private/{doc} {
+        allow read, write: if request.auth != null && request.auth.uid == d;
+      }
+
+      match /appEvents/{e} {
+        allow read: if request.auth != null
+          && resource.data.groupId == get(/databases/$(database)/documents/devices/$(d)).data.get('groupId', null)
+          && roleIn(resource.data.groupId, ['owner', 'supervisor']);
+        allow create: if request.auth != null
+          && request.auth.uid == d
+          && exists(/databases/$(database)/documents/devices/$(d))
+          && get(/databases/$(database)/documents/devices/$(d)).data.get('groupId', null) != null
+          && request.resource.data.groupId == get(/databases/$(database)/documents/devices/$(d)).data.groupId
+          && request.resource.data.keys().hasAll(['type', 'packageName', 'label', 'at', 'detectedLate', 'groupId'])
+          && request.resource.data.keys().hasOnly(['type', 'packageName', 'label', 'at', 'detectedLate', 'groupId'])
+          && request.resource.data.type in ['installed', 'removed']
+          && request.resource.data.detectedLate is bool
+          && request.resource.data.packageName is string
+          && request.resource.data.label is string
+          && request.resource.data.at is timestamp
+          && request.resource.data.at <= request.time + duration.value(5, 'm');
+      }
     }
 
-    function isDeviceHeartbeat(d) {
+    function isDeviceSelfReport(d) {
       return request.auth != null
         && request.auth.uid == d
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['online', 'lastSeen', 'displayName', 'model']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'displayName', 'model', 'accessibility', 'notifications', 'statusAt', 'lastCheckId', 'lastCheckAt'
+           ])
+        && (!('accessibility' in request.resource.data) || request.resource.data.accessibility in ['on', 'off'])
+        && (!('notifications' in request.resource.data) || request.resource.data.notifications in ['on', 'off']);
     }
 
     function isDeviceReenroll(d) {
@@ -151,7 +180,11 @@ service cloud.firestore {
         && request.resource.data.get('hostUid', d) == d
         && request.resource.data.get('groupId', null) != null
         && roleIn(request.resource.data.groupId, ['device'])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['groupId', 'hostUid', 'displayName', 'model', 'online', 'lastSeen', 'enrolledAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'groupId', 'hostUid', 'displayName', 'model', 'enrolledAt', 'accessibility', 'notifications', 'statusAt'
+           ])
+        && (!('accessibility' in request.resource.data) || request.resource.data.accessibility in ['on', 'off'])
+        && (!('notifications' in request.resource.data) || request.resource.data.notifications in ['on', 'off']);
     }
 
     function isDeviceOwnerRemoval() {
