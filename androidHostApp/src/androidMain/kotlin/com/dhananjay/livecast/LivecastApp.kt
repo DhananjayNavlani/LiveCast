@@ -6,11 +6,13 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.dhananjay.livecast.agent.PushTokenRegistry
 import com.dhananjay.livecast.auth.authModule
 import com.dhananjay.livecast.cast.data.RemoteDataSource
 import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.cast.utils.NotificationHelper
 import com.dhananjay.livecast.di.appModule
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.getKoin
@@ -18,6 +20,7 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.androidx.workmanager.koin.workManagerFactory
 import org.koin.core.context.startKoin
+import org.koin.core.qualifier.named
 
 class LivecastApp : Application() {
     override fun onCreate() {
@@ -36,6 +39,11 @@ class LivecastApp : Application() {
             channelDesc = R.string.notification_channel_desc
         )
 
+        val tokenRegistry = getKoin().get<PushTokenRegistry>()
+        val appScope = getKoin().get<CoroutineScope>(named("appScope"))
+        appScope.launch {
+            tokenRegistry.register()
+        }
     }
 
 

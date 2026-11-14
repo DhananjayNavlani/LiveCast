@@ -1,5 +1,6 @@
 package com.dhananjay.livecast.group
 
+import com.dhananjay.livecast.agent.EnrollmentListener
 import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
 import com.dhananjay.livecast.auth.EmailVerifier
@@ -690,5 +691,75 @@ class EnrollmentViewModelTest {
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.Confirm(candidateB, canGoBack = false), vm.state.value)
+    }
+
+    private class FakeEnrollmentListener(
+        private val shouldThrow: Boolean = false
+    ) : EnrollmentListener {
+        val calls = mutableListOf<Pair<String, String>>()
+        override suspend fun onEnrolled(deviceId: String, groupId: String) {
+            calls.add(deviceId to groupId)
+            if (shouldThrow) {
+                throw RuntimeException("listener failure")
+            }
+        }
+    }
+
+    @Test
+    fun confirmNotifiesListeners() = runTest {
+        val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
+        val session = FakeSessionProvider(user)
+        val verifier = FakeEmailVerifier(session)
+        val deviceInfo = FakeHostDeviceInfoProvider()
+        val directory = FakeEnrollmentDirectory()
+        val registry = FakeDeviceRegistry()
+        val listener = FakeEnrollmentListener()
+
+        val candidate = EnrollmentCandidate(
+            group = Group(id = "g1", name = "Family", ownerUid = "o1", createdAtEpochMs = 1000L),
+            supervisors = listOf(GroupMember("g1", "mum@x.com", GroupRole.OWNER, "Mum", 100L))
+        )
+        directory.candidatesResult = Result.success(listOf(candidate))
+        registry.flowFor("uid1").tryEmit(
+            HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
+        )
+
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, listOf(listener))
+        advanceUntilIdle()
+
+        vm.confirm()
+        advanceUntilIdle()
+
+        assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
+        assertEquals(listOf("uid1" to "g1"), listener.calls)
+    }
+
+    @Test
+    fun listenerFailureStillEnrolled() = runTest {
+        val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
+        val session = FakeSessionProvider(user)
+        val verifier = FakeEmailVerifier(session)
+        val deviceInfo = FakeHostDeviceInfoProvider()
+        val directory = FakeEnrollmentDirectory()
+        val registry = FakeDeviceRegistry()
+        val listener = FakeEnrollmentListener(shouldThrow = true)
+
+        val candidate = EnrollmentCandidate(
+            group = Group(id = "g1", name = "Family", ownerUid = "o1", createdAtEpochMs = 1000L),
+            supervisors = listOf(GroupMember("g1", "mum@x.com", GroupRole.OWNER, "Mum", 100L))
+        )
+        directory.candidatesResult = Result.success(listOf(candidate))
+        registry.flowFor("uid1").tryEmit(
+            HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
+        )
+
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, listOf(listener))
+        advanceUntilIdle()
+
+        vm.confirm()
+        advanceUntilIdle()
+
+        assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
+        assertEquals(listOf("uid1" to "g1"), listener.calls)
     }
 }

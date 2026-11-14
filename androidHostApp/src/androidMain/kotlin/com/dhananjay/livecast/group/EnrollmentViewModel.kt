@@ -2,6 +2,7 @@ package com.dhananjay.livecast.group
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dhananjay.livecast.agent.EnrollmentListener
 import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
 import com.dhananjay.livecast.auth.EmailVerifier
@@ -46,7 +47,8 @@ class EnrollmentViewModel(
     private val verifier: EmailVerifier,
     private val deviceInfo: HostDeviceInfoProvider,
     private val directory: EnrollmentDirectory,
-    private val registry: DeviceRegistry
+    private val registry: DeviceRegistry,
+    private val listeners: List<EnrollmentListener> = emptyList()
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<EnrollmentUiState>(EnrollmentUiState.Loading)
@@ -246,6 +248,13 @@ class EnrollmentViewModel(
                 result.fold(
                     onSuccess = {
                         _state.value = EnrollmentUiState.Enrolled(current.candidate.group.id)
+                        listeners.forEach { listener ->
+                            try {
+                                listener.onEnrolled(device.id, current.candidate.group.id)
+                            } catch (_: Exception) {
+                                // listener failure is logged and never fails enrollment
+                            }
+                        }
                     },
                     onFailure = { e ->
                         val latest = _state.value

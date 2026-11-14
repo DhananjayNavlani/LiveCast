@@ -72,6 +72,7 @@ kotlin {
 
             implementation(project.dependencies.platform(libs.firebase.android.bom))
             implementation(libs.bundles.firebase.android)
+            implementation(libs.firebase.messaging)
             implementation(libs.firebase.auth.ui)
 
             implementation(libs.koin.android)

@@ -83,7 +83,6 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
 
     private fun startObservers() {
         serviceScope.launch {
-            remoteDataSource.setUserOnline(serviceScope)
             remoteDataSource.getConfigCollectionFlow().distinctUntilChanged().collectLatest {
                 it.onSuccess { document ->
                     val config = document.toObject<DeviceConfig>() ?: return@onSuccess

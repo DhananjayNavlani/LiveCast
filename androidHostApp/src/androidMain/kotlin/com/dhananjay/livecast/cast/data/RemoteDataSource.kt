@@ -89,67 +89,6 @@ class RemoteDataSource(
         awaitClose { listener.remove() }
     }
 
-
-    /**
-     * Mark the current user as online and start heartbeat.
-     * Uses atomic operations to prevent race conditions.
-     */
-    suspend fun setUserOnline(scope: kotlinx.coroutines.CoroutineScope): Boolean {
-        return try {
-            val id = userId ?: return false
-
-            // Collect device info
-            cachedDeviceInfo = DeviceInfoHelper.getDeviceInfo(context)
-            val deviceInfo = cachedDeviceInfo!!
-
-            // Atomic update - set online status with device info
-            firestore.collection("users").document(id).set(
-                mapOf(
-                    "is_online" to true,
-                    "is_broadcaster" to true,
-                    "is_viewer" to false,
-                    "platform" to "android",
-                    "last_seen" to FieldValue.serverTimestamp(),
-                    "width_pixels" to deviceInfo.screenWidth,
-                    "height_pixels" to deviceInfo.screenHeight,
-                    "device" to mapOf(
-                        "device_id" to deviceInfo.deviceId,
-                        "device_name" to deviceInfo.deviceName,
-                        "manufacturer" to deviceInfo.manufacturer,
-                        "model" to deviceInfo.model,
-                        "brand" to deviceInfo.brand,
-                        "sdk_version" to deviceInfo.sdkVersion,
-                        "android_version" to deviceInfo.androidVersion,
-                        "screen_width" to deviceInfo.screenWidth,
-                        "screen_height" to deviceInfo.screenHeight,
-                        "screen_density" to deviceInfo.screenDensity,
-                        "battery_level" to deviceInfo.batteryLevel,
-                        "is_charging" to deviceInfo.isCharging,
-                        "network_type" to deviceInfo.networkType,
-                        "ip_address" to deviceInfo.ipAddress,
-                        "app_version" to deviceInfo.appVersion,
-                        "app_version_code" to deviceInfo.appVersionCode,
-                    )
-                ),
-                SetOptions.merge()
-            ).await()
-
-            // Start heartbeat to keep updating last_seen
-            startHeartbeat(scope)
-
-            // Update rooms/online count atomically
-            updateOnlineRoomCount(increment = true)
-
-            Log.d(TAG, "User $id is now online with device: ${deviceInfo.deviceName}")
-            true
-        } catch (e: Exception) {
-            coroutineContext.ensureActive()
-            crashlytics.recordException(e)
-            Log.e(TAG, "Error setting user online: $e")
-            false
-        }
-    }
-
     /**
      * Mark the current user as offline and stop heartbeat.
      */
@@ -269,8 +208,7 @@ class RemoteDataSource(
         }
     }
 
-    // Legacy methods - kept for backward compatibility, delegate to new methods
-    @Deprecated("Use setUserOnline instead", ReplaceWith("setUserOnline(scope)"))
+    // Legacy methods - kept for backward compatibility
     suspend fun addDeviceOnline(): Boolean {
         return try {
             firestore.collection("rooms").document("online").let {

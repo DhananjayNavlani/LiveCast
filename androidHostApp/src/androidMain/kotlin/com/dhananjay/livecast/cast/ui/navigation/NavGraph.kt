@@ -28,7 +28,6 @@ import com.dhananjay.livecast.cast.utils.Constants
 import com.dhananjay.livecast.group.EnrollmentScreen
 import com.dhananjay.livecast.group.EnrollmentUiState
 import com.dhananjay.livecast.group.EnrollmentViewModel
-import com.dhananjay.livecast.group.HostPresenceViewModel
 import com.dhananjay.livecast.group.SupervisedByViewModel
 import com.dhananjay.livecast.ui.components.LiveCastButton
 import com.dhananjay.livecast.ui.components.LiveCastButtonVariant
@@ -68,7 +67,6 @@ fun LiveCastNavigation(
                 )
                 val supervisedByViewModel: SupervisedByViewModel = koinViewModel()
                 val supervisedState by supervisedByViewModel.state.collectAsStateWithLifecycle()
-                koinViewModel<HostPresenceViewModel>()
 
                 LaunchedEffect(supervisedState.enrolled) {
                     if (supervisedState.enrolled == false) {
