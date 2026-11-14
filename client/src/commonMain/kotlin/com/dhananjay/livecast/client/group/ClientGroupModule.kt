@@ -11,4 +11,5 @@ val clientGroupModule: Module = module {
     viewModel { MyDevicesViewModel(get(), get(), get(), get()) }
     viewModel { GroupManagementViewModel(get(), get(), get()) }
     viewModel { VerifyEmailViewModel(get(), get()) }
+    viewModel { (deviceId: String, groupId: String) -> DeviceDetailViewModel(deviceId, groupId, get()) }
 }

@@ -41,4 +41,24 @@ class ListenReducerTest {
         reducer.onCurrent()
         assertEquals(Snapshot.Emit(emptyList()), reducer.takeSnapshot())
     }
+
+    @Test
+    fun orderedAndLimited() {
+        val reducer = QueryListenReducer(
+            orderBy = listOf("at" to Direction.DESCENDING),
+            limit = 2,
+        )
+
+        val doc1 = FirestoreDoc("test/d1", "d1", mapOf("at" to 100L))
+        val doc2 = FirestoreDoc("test/d2", "d2", mapOf("at" to 300L))
+        val doc3 = FirestoreDoc("test/d3", "d3", mapOf("at" to 200L))
+
+        reducer.onDocumentChanged(doc1)
+        reducer.onDocumentChanged(doc2)
+        reducer.onDocumentChanged(doc3)
+        reducer.onCurrent()
+
+        val snapshot = reducer.takeSnapshot()
+        assertEquals(Snapshot.Emit(listOf(doc2, doc3)), snapshot)
+    }
 }

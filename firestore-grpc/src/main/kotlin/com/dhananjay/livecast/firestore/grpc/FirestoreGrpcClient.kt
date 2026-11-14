@@ -268,39 +268,9 @@ class FirestoreGrpcClient(
 
         return listenWithReducer(
             buildTarget = { resumeToken ->
-                val fromSelector = StructuredQuery.CollectionSelector.newBuilder()
-                    .setCollectionId(query.collectionId)
-                    .setAllDescendants(query.allDescendants)
-
-                val sq = StructuredQuery.newBuilder()
-                    .addFrom(fromSelector)
-
-                val filters = query.whereEquals.map { (fieldPath, value) ->
-                    StructuredQuery.Filter.newBuilder()
-                        .setFieldFilter(
-                            StructuredQuery.FieldFilter.newBuilder()
-                                .setField(StructuredQuery.FieldReference.newBuilder().setFieldPath(fieldPath))
-                                .setOp(StructuredQuery.FieldFilter.Operator.EQUAL)
-                                .setValue(toProtoValue(value))
-                        ).build()
-                }
-
-                if (filters.size == 1) {
-                    sq.setWhere(filters[0])
-                } else if (filters.size > 1) {
-                    sq.setWhere(
-                        StructuredQuery.Filter.newBuilder()
-                            .setCompositeFilter(
-                                StructuredQuery.CompositeFilter.newBuilder()
-                                    .setOp(StructuredQuery.CompositeFilter.Operator.AND)
-                                    .addAllFilters(filters)
-                            )
-                    )
-                }
-
                 val queryTarget = Target.QueryTarget.newBuilder()
                     .setParent(parent)
-                    .setStructuredQuery(sq)
+                    .setStructuredQuery(buildStructuredQuery(query))
                     .build()
 
                 val targetBuilder = Target.newBuilder()
@@ -312,7 +282,7 @@ class FirestoreGrpcClient(
                 }
                 targetBuilder.build()
             },
-            reducerFactory = { QueryListenReducer() }
+            reducerFactory = { QueryListenReducer(query.orderBy, query.limit) }
         )
     }
 

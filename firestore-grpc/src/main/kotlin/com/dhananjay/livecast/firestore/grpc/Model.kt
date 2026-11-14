@@ -1,5 +1,7 @@
 package com.dhananjay.livecast.firestore.grpc
 
+enum class Direction { ASCENDING, DESCENDING }
+
 data class FirestoreDoc(
     val path: String,
     val id: String,
@@ -10,7 +12,9 @@ data class FirestoreQuery(
     val parentPath: String,
     val collectionId: String,
     val allDescendants: Boolean = false,
-    val whereEquals: List<Pair<String, Any?>> = emptyList()
+    val whereEquals: List<Pair<String, Any?>> = emptyList(),
+    val orderBy: List<Pair<String, Direction>> = emptyList(),
+    val limit: Int? = null,
 )
 
 sealed interface FirestoreWrite {

@@ -28,10 +28,12 @@ class DesktopGroupModuleTest {
         val groupRepo = app.koin.get<GroupRepository>()
         val memberRepo = app.koin.get<GroupMemberRepository>()
         val deviceRepo = app.koin.get<GroupDeviceRepository>()
+        val appEventRepo = app.koin.get<AppEventRepository>()
 
         assertIs<UnsupportedGroupRepository>(groupRepo)
         assertIs<UnsupportedGroupMemberRepository>(memberRepo)
         assertIs<UnsupportedGroupDeviceRepository>(deviceRepo)
+        assertIs<UnsupportedAppEventRepository>(appEventRepo)
 
         app.close()
     }

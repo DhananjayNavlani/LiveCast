@@ -25,4 +25,9 @@ actual val groupPlatformModule: Module = module {
             DocumentStoreGroupDeviceRepository(get<DocumentStore>())
         } ?: UnsupportedGroupDeviceRepository(MISSING_CONFIG_MSG)
     }
+    single<AppEventRepository> {
+        get<FirestoreConfigSource>().load()?.let {
+            DocumentStoreAppEventRepository(get<DocumentStore>())
+        } ?: UnsupportedAppEventRepository(MISSING_CONFIG_MSG)
+    }
 }

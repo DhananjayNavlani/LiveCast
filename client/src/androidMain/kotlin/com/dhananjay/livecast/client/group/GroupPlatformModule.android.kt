@@ -9,4 +9,5 @@ actual val groupPlatformModule: Module = module {
     single<GroupRepository> { FirestoreSdkGroupRepository(get(), get()) }
     single<GroupMemberRepository> { FirestoreSdkGroupMemberRepository(get()) }
     single<GroupDeviceRepository> { FirestoreSdkGroupDeviceRepository(get()) }
+    single<AppEventRepository> { FirestoreSdkAppEventRepository(get()) }
 }

@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.dhananjay.livecast.auth.LoginViewModel
 import com.dhananjay.livecast.client.group.ClientGate
+import com.dhananjay.livecast.client.group.DeviceDetailScreen
 import com.dhananjay.livecast.client.group.GroupManagementScreen
 import com.dhananjay.livecast.client.group.MyDevicesScreen
 import com.dhananjay.livecast.client.group.VerifyEmailScreen
@@ -19,6 +20,7 @@ import org.koin.compose.viewmodel.koinViewModel
 private sealed interface ClientScreen {
     data object MyDevices : ClientScreen
     data object GroupManagement : ClientScreen
+    data class DeviceDetail(val device: HostDevice) : ClientScreen
     data class Viewer(val device: HostDevice) : ClientScreen
 }
 
@@ -56,7 +58,7 @@ fun ClientApp(
                     is ClientScreen.MyDevices -> {
                         MyDevicesScreen(
                             onManageGroups = { currentScreen = ClientScreen.GroupManagement },
-                            onDeviceClick = { device -> currentScreen = ClientScreen.Viewer(device) },
+                            onDeviceClick = { device -> currentScreen = ClientScreen.DeviceDetail(device) },
                             onSignOut = { viewModel.signOut() }
                         )
                     }
@@ -67,10 +69,20 @@ fun ClientApp(
                         )
                     }
 
+                    is ClientScreen.DeviceDetail -> {
+                        DeviceDetailScreen(
+                            deviceId = screen.device.id,
+                            groupId = screen.device.groupId ?: "",
+                            deviceName = screen.device.displayName,
+                            onBack = { currentScreen = ClientScreen.MyDevices },
+                            onOpenViewer = { currentScreen = ClientScreen.Viewer(screen.device) }
+                        )
+                    }
+
                     is ClientScreen.Viewer -> {
                         ViewerScreen(
                             viewModel = viewModel,
-                            onBack = { currentScreen = ClientScreen.MyDevices }
+                            onBack = { currentScreen = ClientScreen.DeviceDetail(screen.device) }
                         )
                     }
                 }

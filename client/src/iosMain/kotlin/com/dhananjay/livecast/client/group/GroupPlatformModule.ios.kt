@@ -9,4 +9,5 @@ actual val groupPlatformModule: Module = module {
     single<GroupRepository> { UnsupportedGroupRepository() }
     single<GroupMemberRepository> { UnsupportedGroupMemberRepository() }
     single<GroupDeviceRepository> { UnsupportedGroupDeviceRepository() }
+    single<AppEventRepository> { UnsupportedAppEventRepository() }
 }

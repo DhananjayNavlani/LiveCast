@@ -196,4 +196,37 @@ class FirestoreGrpcClientEmulatorTest {
 
         client.close()
     }
+
+    @Test
+    fun listenQueryOrderedLimited() = runBlocking {
+        val client = createClient()
+        val tag = UUID.randomUUID().toString()
+        val p1 = "test_events/e1_$tag"
+        val p2 = "test_events/e2_$tag"
+        val p3 = "test_events/e3_$tag"
+
+        client.commit(listOf(
+            FirestoreWrite.Set(p1, mapOf("tag" to tag, "at" to 1000L)),
+            FirestoreWrite.Set(p2, mapOf("tag" to tag, "at" to 3000L)),
+            FirestoreWrite.Set(p3, mapOf("tag" to tag, "at" to 2000L))
+        ))
+
+        withTimeout(5000) {
+            val query = FirestoreQuery(
+                parentPath = "",
+                collectionId = "test_events",
+                whereEquals = listOf("tag" to tag),
+                orderBy = listOf("at" to Direction.DESCENDING),
+                limit = 2
+            )
+            val results = client.listenQuery(query).first { docs -> docs.size == 2 }
+            assertEquals(2, results.size)
+            assertEquals(p2, results[0].path)
+            assertEquals(3000L, results[0].fields["at"])
+            assertEquals(p3, results[1].path)
+            assertEquals(2000L, results[1].fields["at"])
+        }
+
+        client.close()
+    }
 }
