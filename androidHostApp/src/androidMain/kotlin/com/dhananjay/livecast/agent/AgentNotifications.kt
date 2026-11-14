@@ -9,6 +9,8 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.dhananjay.livecast.R
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 interface AgentNotifications {
     fun showSupervised(byName: String)
@@ -16,12 +18,13 @@ interface AgentNotifications {
     fun cancel()
 }
 
-class SupervisionRepostReceiver : BroadcastReceiver() {
+class SupervisionRepostReceiver : BroadcastReceiver(), KoinComponent {
+    private val agentNotifications by inject<AgentNotifications>()
+
     override fun onReceive(context: Context, intent: Intent) {
         val name = intent.getStringExtra(EXTRA_BY_NAME)
-            ?: AndroidAgentNotifications.lastSupervisedName
         if (!name.isNullOrBlank()) {
-            AndroidAgentNotifications(context).showSupervised(name)
+            agentNotifications.showSupervised(name)
         }
     }
 
@@ -55,8 +58,6 @@ class AndroidAgentNotifications(
     }
 
     override fun showSupervised(byName: String) {
-        lastSupervisedName = byName
-
         val deleteIntent = Intent(context, SupervisionRepostReceiver::class.java).apply {
             putExtra(SupervisionRepostReceiver.EXTRA_BY_NAME, byName)
         }
@@ -68,7 +69,7 @@ class AndroidAgentNotifications(
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_AGENT_STATUS)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_supervised)
             .setContentTitle("Supervised by $byName")
             .setOngoing(true)
             .setDeleteIntent(deletePendingIntent)
@@ -88,7 +89,7 @@ class AndroidAgentNotifications(
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_AGENT_STATUS)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_supervised)
             .setContentTitle("Accessibility is off — tap to turn on")
             .setOngoing(true)
             .setContentIntent(contentPendingIntent)
@@ -108,8 +109,5 @@ class AndroidAgentNotifications(
         const val NOTIFICATION_ID_AGENT_STATUS = 2001
         private const val REQUEST_CODE_REPOST = 101
         private const val REQUEST_CODE_RE_ENABLE = 102
-
-        @Volatile
-        var lastSupervisedName: String? = null
     }
 }

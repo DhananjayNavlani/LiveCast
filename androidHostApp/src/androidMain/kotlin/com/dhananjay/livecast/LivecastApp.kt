@@ -39,9 +39,9 @@ class LivecastApp : Application() {
             channelDesc = R.string.notification_channel_desc
         )
 
-        val tokenRegistry = getKoin().get<PushTokenRegistry>()
         val appScope = getKoin().get<CoroutineScope>(named("appScope"))
         appScope.launch {
+            val tokenRegistry = getKoin().get<PushTokenRegistry>()
             tokenRegistry.register()
         }
     }

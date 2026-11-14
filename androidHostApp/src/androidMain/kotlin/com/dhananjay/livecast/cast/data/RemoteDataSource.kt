@@ -209,6 +209,7 @@ class RemoteDataSource(
     }
 
     // Legacy methods - kept for backward compatibility
+    @Deprecated("Legacy presence method - use device check instead")
     suspend fun addDeviceOnline(): Boolean {
         return try {
             firestore.collection("rooms").document("online").let {

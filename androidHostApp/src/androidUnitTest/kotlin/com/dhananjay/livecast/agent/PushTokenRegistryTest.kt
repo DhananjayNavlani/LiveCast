@@ -1,11 +1,17 @@
 package com.dhananjay.livecast.agent
 
 import com.dhananjay.livecast.group.DeviceIdentity
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class PushTokenRegistryTest {
 
     private class FakeDeviceIdentity(override var deviceId: String? = "dev1") : DeviceIdentity
@@ -27,8 +33,16 @@ class PushTokenRegistryTest {
         }
     }
 
-    private class FakePushTokenSource(var token: String? = "src-token") : PushTokenSource {
-        override suspend fun currentToken(): String? = token
+    private class FakePushTokenSource(
+        var token: String? = "src-token",
+        var delayMs: Long = 0L
+    ) : PushTokenSource {
+        override suspend fun currentToken(): String? {
+            if (delayMs > 0) {
+                delay(delayMs)
+            }
+            return token
+        }
     }
 
     @Test
@@ -98,5 +112,26 @@ class PushTokenRegistryTest {
         registry.onEnrolled("dev1", "grp1")
 
         assertEquals(listOf("dev1" to "source-token-123"), store.saved)
+    }
+
+    @Test
+    fun sourceTimeoutFails() = runTest {
+        val identity = FakeDeviceIdentity("dev1")
+        val enrollment = FakeEnrollmentState(groupId = "grp1")
+        val store = FakePushTokenStore()
+        val source = FakePushTokenSource(delayMs = 60_000L)
+        val registry = PushTokenRegistry(identity, enrollment, store, source)
+
+        var result: Result<Unit>? = null
+        val job = launch {
+            result = registry.register(null)
+        }
+        runCurrent()
+        advanceTimeBy(10_001L)
+        runCurrent()
+
+        assertTrue(result?.isFailure == true)
+        assertTrue(store.saved.isEmpty())
+        job.cancel()
     }
 }

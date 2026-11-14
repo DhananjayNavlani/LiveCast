@@ -3,6 +3,7 @@ package com.dhananjay.livecast.agent
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
 import android.provider.Settings
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
 
@@ -33,6 +34,14 @@ object AccessibilitySettingParser {
     }
 }
 
+object NotificationStateParser {
+    fun canShow(appEnabled: Boolean, channelImportance: Int?): Boolean {
+        if (!appEnabled) return false
+        if (channelImportance == null) return true
+        return channelImportance != NotificationManager.IMPORTANCE_NONE
+    }
+}
+
 class AndroidDeviceStatusSource(
     private val context: Context
 ) : DeviceStatusSource {
@@ -59,6 +68,12 @@ class AndroidDeviceStatusSource(
     override fun notificationsOn(): Boolean {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             ?: return false
-        return notificationManager.areNotificationsEnabled()
+        val appEnabled = notificationManager.areNotificationsEnabled()
+        val channelImportance = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notificationManager.getNotificationChannel(AndroidAgentNotifications.CHANNEL_ID_AGENT_STATUS)?.importance
+        } else {
+            null
+        }
+        return NotificationStateParser.canShow(appEnabled, channelImportance)
     }
 }

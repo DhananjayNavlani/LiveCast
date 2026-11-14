@@ -1,5 +1,6 @@
 package com.dhananjay.livecast.agent
 
+import android.util.Log
 import com.dhananjay.livecast.group.DeviceIdentity
 import com.dhananjay.livecast.protocol.CheckRules
 import kotlinx.coroutines.TimeoutCancellationException
@@ -29,7 +30,11 @@ class CheckResponder(
         val notificationsOn = status.notificationsOn()
 
         if (!accessibility) {
-            notifications.showAccessibilityOff()
+            runCatching {
+                notifications.showAccessibilityOff()
+            }.onFailure { t ->
+                Log.w("CheckResponder", "Failed to show accessibility off notice", t)
+            }
         }
 
         return try {

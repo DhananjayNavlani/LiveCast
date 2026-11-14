@@ -1,6 +1,6 @@
 package com.dhananjay.livecast.group
 
-import com.dhananjay.livecast.agent.EnrollmentListener
+import com.dhananjay.livecast.agent.EnrollmentNotifier
 import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
 import com.dhananjay.livecast.auth.EmailVerifier
@@ -693,14 +693,14 @@ class EnrollmentViewModelTest {
         assertEquals(EnrollmentUiState.Confirm(candidateB, canGoBack = false), vm.state.value)
     }
 
-    private class FakeEnrollmentListener(
+    private class FakeEnrollmentNotifier(
         private val shouldThrow: Boolean = false
-    ) : EnrollmentListener {
+    ) : EnrollmentNotifier {
         val calls = mutableListOf<Pair<String, String>>()
-        override suspend fun onEnrolled(deviceId: String, groupId: String) {
+        override fun notifyEnrolled(deviceId: String, groupId: String) {
             calls.add(deviceId to groupId)
             if (shouldThrow) {
-                throw RuntimeException("listener failure")
+                throw RuntimeException("notifier failure")
             }
         }
     }
@@ -713,7 +713,7 @@ class EnrollmentViewModelTest {
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
-        val listener = FakeEnrollmentListener()
+        val notifier = FakeEnrollmentNotifier()
 
         val candidate = EnrollmentCandidate(
             group = Group(id = "g1", name = "Family", ownerUid = "o1", createdAtEpochMs = 1000L),
@@ -724,14 +724,14 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, listOf(listener))
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, notifier)
         advanceUntilIdle()
 
         vm.confirm()
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
-        assertEquals(listOf("uid1" to "g1"), listener.calls)
+        assertEquals(listOf("uid1" to "g1"), notifier.calls)
     }
 
     @Test
@@ -742,7 +742,7 @@ class EnrollmentViewModelTest {
         val deviceInfo = FakeHostDeviceInfoProvider()
         val directory = FakeEnrollmentDirectory()
         val registry = FakeDeviceRegistry()
-        val listener = FakeEnrollmentListener(shouldThrow = true)
+        val notifier = FakeEnrollmentNotifier(shouldThrow = true)
 
         val candidate = EnrollmentCandidate(
             group = Group(id = "g1", name = "Family", ownerUid = "o1", createdAtEpochMs = 1000L),
@@ -753,13 +753,13 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, listOf(listener))
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, notifier)
         advanceUntilIdle()
 
         vm.confirm()
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
-        assertEquals(listOf("uid1" to "g1"), listener.calls)
+        assertEquals(listOf("uid1" to "g1"), notifier.calls)
     }
 }

@@ -64,6 +64,7 @@ class CheckResponderTest {
         var showSupervisedCalls = mutableListOf<String>()
         var showAccessibilityOffCalls = 0
         var cancelCalls = 0
+        var shouldThrowAccessibilityOff = false
 
         override fun showSupervised(byName: String) {
             showSupervisedCalls.add(byName)
@@ -71,6 +72,9 @@ class CheckResponderTest {
 
         override fun showAccessibilityOff() {
             showAccessibilityOffCalls++
+            if (shouldThrowAccessibilityOff) {
+                throw RuntimeException("Notification failed")
+            }
         }
 
         override fun cancel() {
@@ -160,5 +164,23 @@ class CheckResponderTest {
 
         assertTrue(result?.isFailure == true)
         job.cancel()
+    }
+
+    @Test
+    fun noticeFailureStillWritesReply() = runTest {
+        val identity = FakeDeviceIdentity("dev1")
+        val status = FakeDeviceStatusSource(accessibility = false, notifications = true)
+        val writer = FakeDeviceStatusWriter()
+        val notifications = FakeAgentNotifications().apply { shouldThrowAccessibilityOff = true }
+        val responder = CheckResponder(identity, status, writer, notifications)
+
+        val result = responder.respond("check1")
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, notifications.showAccessibilityOffCalls)
+        assertEquals(1, writer.replies.size)
+        assertEquals("dev1", writer.replies.first().deviceId)
+        assertEquals("check1", writer.replies.first().checkId)
+        assertFalse(writer.replies.first().accessibilityOn)
     }
 }

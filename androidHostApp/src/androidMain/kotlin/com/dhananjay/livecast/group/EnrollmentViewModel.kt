@@ -1,8 +1,9 @@
 package com.dhananjay.livecast.group
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dhananjay.livecast.agent.EnrollmentListener
+import com.dhananjay.livecast.agent.EnrollmentNotifier
 import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
 import com.dhananjay.livecast.auth.EmailVerifier
@@ -48,7 +49,7 @@ class EnrollmentViewModel(
     private val deviceInfo: HostDeviceInfoProvider,
     private val directory: EnrollmentDirectory,
     private val registry: DeviceRegistry,
-    private val listeners: List<EnrollmentListener> = emptyList()
+    private val notifier: EnrollmentNotifier? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<EnrollmentUiState>(EnrollmentUiState.Loading)
@@ -248,12 +249,10 @@ class EnrollmentViewModel(
                 result.fold(
                     onSuccess = {
                         _state.value = EnrollmentUiState.Enrolled(current.candidate.group.id)
-                        listeners.forEach { listener ->
-                            try {
-                                listener.onEnrolled(device.id, current.candidate.group.id)
-                            } catch (_: Exception) {
-                                // listener failure is logged and never fails enrollment
-                            }
+                        try {
+                            notifier?.notifyEnrolled(device.id, current.candidate.group.id)
+                        } catch (t: Throwable) {
+                            Log.w("EnrollmentViewModel", "Failed to notify enrollment for ${device.id}", t)
                         }
                     },
                     onFailure = { e ->

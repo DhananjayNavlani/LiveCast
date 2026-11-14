@@ -1,15 +1,18 @@
 package com.dhananjay.livecast.di
 
+import android.util.Log
 import androidx.work.WorkManager
 import com.dhananjay.livecast.MainViewModel
 import com.dhananjay.livecast.agent.AgentNotifications
 import com.dhananjay.livecast.agent.AndroidAgentNotifications
 import com.dhananjay.livecast.agent.AndroidDeviceStatusSource
+import com.dhananjay.livecast.agent.AppScopeEnrollmentNotifier
 import com.dhananjay.livecast.agent.CheckResponder
 import com.dhananjay.livecast.agent.DeviceRegistryEnrollmentState
 import com.dhananjay.livecast.agent.DeviceStatusSource
 import com.dhananjay.livecast.agent.DeviceStatusWriter
 import com.dhananjay.livecast.agent.EnrollmentListener
+import com.dhananjay.livecast.agent.EnrollmentNotifier
 import com.dhananjay.livecast.agent.EnrollmentState
 import com.dhananjay.livecast.agent.FirebasePushTokenSource
 import com.dhananjay.livecast.agent.FirestoreDeviceStatusWriter
@@ -37,6 +40,7 @@ import com.dhananjay.livecast.group.FirestoreGroupMembersDirectory
 import com.dhananjay.livecast.group.GroupMembersDirectory
 import com.dhananjay.livecast.group.HostDeviceInfoProvider
 import com.dhananjay.livecast.group.SupervisedByViewModel
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,6 +54,7 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.messaging.FirebaseMessaging
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.dsl.worker
 import org.koin.core.module.dsl.bind
@@ -84,15 +89,22 @@ val appModule = module {
     single<DeviceRegistry> { FirestoreDeviceRegistry(get()) }
     single<EnrollmentDirectory> { FirestoreEnrollmentDirectory(get()) }
     single<GroupMembersDirectory> { FirestoreGroupMembersDirectory(get()) }
-    viewModel { EnrollmentViewModel(get(), get(), get(), get(), get(), getAll()) }
+    single<EnrollmentNotifier> { AppScopeEnrollmentNotifier(getAll(), get(named("appScope"))) }
+    viewModel { EnrollmentViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { SupervisedByViewModel(get(), get(), get()) }
 
-    single(named("appScope")) { CoroutineScope(SupervisorJob() + Dispatchers.IO) }
+    single { FirebaseMessaging.getInstance() }
+    single(named("appScope")) {
+        val handler = CoroutineExceptionHandler { _, throwable ->
+            Log.w("AppScope", "Unhandled exception in appScope", throwable)
+        }
+        CoroutineScope(SupervisorJob() + Dispatchers.IO + handler)
+    }
     single<DeviceStatusSource> { AndroidDeviceStatusSource(androidContext()) }
     single<DeviceStatusWriter> { FirestoreDeviceStatusWriter(get()) }
     single<EnrollmentState> { DeviceRegistryEnrollmentState(get(), get()) }
     single<PushTokenStore> { FirestorePushTokenStore(get()) }
-    single<PushTokenSource> { FirebasePushTokenSource() }
+    single<PushTokenSource> { FirebasePushTokenSource(get()) }
     single { PushTokenRegistry(get(), get(), get(), get()) } bind EnrollmentListener::class
     single<AgentNotifications> { AndroidAgentNotifications(androidContext()) }
     single { CheckResponder(get(), get(), get(), get()) }
