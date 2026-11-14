@@ -67,12 +67,6 @@ android {
     }
 }
 
-configurations.all {
-    resolutionStrategy {
-        force("com.squareup.okhttp3:okhttp:5.4.0")
-        force("com.squareup.okhttp3:okhttp-android:5.4.0")
-    }
-}
 
 dependencies {
     implementation(projects.client)

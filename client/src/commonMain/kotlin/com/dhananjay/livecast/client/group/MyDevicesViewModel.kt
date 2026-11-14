@@ -1,3 +1,5 @@
+@file:OptIn(kotlin.time.ExperimentalTime::class)
+
 package com.dhananjay.livecast.client.group
 
 import androidx.lifecycle.ViewModel
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 
 data class DeviceRow(
     val device: HostDevice,
@@ -53,6 +56,7 @@ class MyDevicesViewModel(
     private var activeJob: Job? = null
     private var devicesJob: Job? = null
     private val checkJobs = mutableMapOf<String, Job>()
+    private var rebindGeneration = 0
 
     private val _devicesFlow = MutableStateFlow<List<HostDevice>>(emptyList())
     private var currentMemberships: List<GroupMembership> = emptyList()
@@ -68,6 +72,7 @@ class MyDevicesViewModel(
     }
 
     private fun rebind(authState: AuthState) {
+        rebindGeneration++
         activeJob?.cancel()
         devicesJob?.cancel()
         checkJobs.values.forEach { it.cancel() }
@@ -162,42 +167,51 @@ class MyDevicesViewModel(
         checkStates[deviceId] = CheckState.Checking
         updateRows()
 
+        val generation = rebindGeneration
         checkJobs[deviceId]?.cancel()
         checkJobs[deviceId] = viewModelScope.launch {
-            val outcome = checks.requestCheck(deviceId)
-            when (outcome) {
-                is CheckRequestResult.Requested -> {
-                    val replyAt = awaitCheckReply(
-                        devices = _devicesFlow,
-                        deviceId = deviceId,
-                        checkId = outcome.checkId,
-                        timeoutMs = CheckRules.REPLY_TIMEOUT_MS
-                    )
-                    checkStates[deviceId] = if (replyAt != null) {
-                        CheckState.Online(replyAt)
-                    } else {
-                        CheckState.Offline
+            try {
+                val outcome = checks.requestCheck(deviceId)
+                when (outcome) {
+                    is CheckRequestResult.Requested -> {
+                        val replyAt = awaitCheckReply(
+                            devices = _devicesFlow,
+                            deviceId = deviceId,
+                            checkId = outcome.checkId,
+                            timeoutMs = CheckRules.REPLY_TIMEOUT_MS,
+                            nowMs = { Clock.System.now().toEpochMilliseconds() }
+                        )
+                        checkStates[deviceId] = if (replyAt != null) {
+                            CheckState.Online(replyAt)
+                        } else {
+                            CheckState.Offline
+                        }
+                        updateRows()
                     }
-                    updateRows()
+                    is CheckRequestResult.AppRemoved -> {
+                        checkStates[deviceId] = CheckState.AppRemoved
+                        updateRows()
+                    }
+                    is CheckRequestResult.NoPushToken -> {
+                        checkStates[deviceId] = CheckState.NotSetUp
+                        updateRows()
+                    }
+                    is CheckRequestResult.NotAllowed -> {
+                        checkStates[deviceId] = CheckState.Error("You no longer have access")
+                        updateRows()
+                    }
+                    is CheckRequestResult.RateLimited -> {
+                        checkStates[deviceId] = CheckState.RateLimited
+                        updateRows()
+                    }
+                    is CheckRequestResult.Failed -> {
+                        checkStates[deviceId] = CheckState.Error(outcome.message)
+                        updateRows()
+                    }
                 }
-                is CheckRequestResult.AppRemoved -> {
-                    checkStates[deviceId] = CheckState.AppRemoved
-                    updateRows()
-                }
-                is CheckRequestResult.NoPushToken -> {
-                    checkStates[deviceId] = CheckState.NotSetUp
-                    updateRows()
-                }
-                is CheckRequestResult.NotAllowed -> {
-                    checkStates[deviceId] = CheckState.Error("You no longer have access")
-                    updateRows()
-                }
-                is CheckRequestResult.RateLimited -> {
-                    checkStates[deviceId] = CheckState.RateLimited
-                    updateRows()
-                }
-                is CheckRequestResult.Failed -> {
-                    checkStates[deviceId] = CheckState.Error(outcome.message)
+            } finally {
+                if (generation == rebindGeneration && checkStates[deviceId] == CheckState.Checking) {
+                    checkStates[deviceId] = CheckState.Error("Check failed")
                     updateRows()
                 }
             }

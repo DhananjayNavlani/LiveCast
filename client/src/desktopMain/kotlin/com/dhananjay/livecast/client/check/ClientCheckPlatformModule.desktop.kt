@@ -6,6 +6,9 @@ import java.io.File
 
 actual val checkPlatformModule: Module = module {
     single<ServerConfig> {
-        PropertiesServerConfig(File(System.getProperty("user.home"), ".livecast"))
+        PropertiesServerConfig(
+            configDir = File(System.getProperty("user.home"), ".livecast"),
+            env = System.getenv(),
+        )
     }
 }

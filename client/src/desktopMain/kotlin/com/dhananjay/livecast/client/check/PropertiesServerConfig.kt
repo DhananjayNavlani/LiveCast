@@ -5,7 +5,7 @@ import java.util.Properties
 
 class PropertiesServerConfig(
     private val configDir: File,
-    private val env: Map<String, String> = System.getenv(),
+    private val env: Map<String, String>,
 ) : ServerConfig {
 
     override val baseUrl: String? by lazy {

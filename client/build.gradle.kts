@@ -5,6 +5,22 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
 }
 
+fun org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler.implementation(
+    dependency: Provider<MinimalExternalModuleDependency>,
+    configure: Action<org.gradle.api.artifacts.ExternalModuleDependency>
+) {
+    val dep = project.dependencies.create(dependency.get()) as org.gradle.api.artifacts.ExternalModuleDependency
+    configure.execute(dep)
+    implementation(dep)
+}
+
+fun org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler.implementation(
+    dependency: org.gradle.accessors.dm.LibrariesForLibs.OkhttpLibraryAccessors,
+    configure: Action<org.gradle.api.artifacts.ExternalModuleDependency>
+) {
+    implementation(dependency.asProvider(), configure)
+}
+
 kotlin {
     sourceSets {
         commonMain.dependencies {
@@ -44,6 +60,12 @@ kotlin {
             implementation(libs.firebase.firestore)
             implementation(libs.firebase.auth)
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.okhttp) {
+                version { strictly(libs.versions.okhttp.get()) }
+            }
+            implementation(libs.okhttp.android) {
+                version { strictly(libs.versions.okhttp.get()) }
+            }
         }
 
         desktopMain.dependencies {

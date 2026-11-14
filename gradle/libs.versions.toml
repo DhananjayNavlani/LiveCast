@@ -30,7 +30,8 @@ firestore-v1 = "3.52.0"
 ktor = "3.6.0"
 nimbus-jose-jwt = "10.0.2"
 google-auth = "1.33.1"
-kotlinx-datetime = "0.6.0"
+kotlinx-datetime = "0.7.1"
+# 5.5.0 needs compileSdk 37
 okhttp = "5.4.0"
 
 [libraries]

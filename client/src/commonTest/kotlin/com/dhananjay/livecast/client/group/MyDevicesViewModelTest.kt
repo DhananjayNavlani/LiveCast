@@ -313,9 +313,114 @@ class MyDevicesViewModelTest {
 
         auth.setUser(User("u2", "u2@x.com", "User 2", emailVerified = true))
         runCurrent()
+        runCurrent()
 
         val rows = viewModel.state.value.rows
+        assertEquals(1, rows.size)
         rows.forEach { assertEquals(CheckState.Idle, it.check) }
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun userSwitchCancelsInFlightCheck() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService(CheckRequestResult.Requested("c1"))
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+        assertEquals(CheckState.Checking, viewModel.state.value.rows.first().check)
+
+        auth.setUser(User("u2", "u2@x.com", "User 2", emailVerified = true))
+        runCurrent()
+        runCurrent()
+
+        advanceTimeBy(20_001L)
+        runCurrent()
+
+        val rows = viewModel.state.value.rows
+        assertEquals(1, rows.size)
+        assertEquals(CheckState.Idle, rows.first().check)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun replyBeforeWaitStartsIsOnline() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val checkService = object : DeviceCheckService {
+            override suspend fun requestCheck(deviceId: String): CheckRequestResult {
+                devicesRepo.devicesFlow.value = listOf(
+                    dev1.copy(lastCheckId = "c-fast", lastCheckAtEpochMs = 7777L)
+                )
+                return CheckRequestResult.Requested("c-fast")
+            }
+        }
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+
+        assertEquals(CheckState.Online(7777L), viewModel.state.value.rows.first().check)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun engineCancellationEndsInError() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+
+        var callCount = 0
+        val checkService = object : DeviceCheckService {
+            override suspend fun requestCheck(deviceId: String): CheckRequestResult {
+                callCount++
+                if (callCount == 1) {
+                    throw kotlinx.coroutines.CancellationException("engine cancelled")
+                }
+                return CheckRequestResult.Requested("c2")
+            }
+        }
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+
+        assertEquals(1, callCount)
+        assertEquals(CheckState.Error("Check failed"), viewModel.state.value.rows.first().check)
+
+        // Second tap calls the service again
+        viewModel.check("d1")
+        runCurrent()
+
+        assertEquals(2, callCount)
+        assertEquals(CheckState.Checking, viewModel.state.value.rows.first().check)
+
         viewModel.viewModelScope.cancel()
     }
 
