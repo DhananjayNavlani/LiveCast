@@ -62,16 +62,16 @@ fun MyDevicesScreen(
                     Text(
                         text = "My Devices",
                         style = LiveCastTheme.typography.h2,
-                        color = LiveCastTheme.colors.onPrimary
+                        color = LiveCastTheme.colors.onTopBar
                     )
                 },
-                backgroundColor = LiveCastTheme.colors.primary,
+                backgroundColor = LiveCastTheme.colors.topBar,
                 actions = {
                     if (!state.guest) {
                         TextButton(onClick = onManageGroups) {
                             Text(
                                 text = "Groups",
-                                color = LiveCastTheme.colors.onPrimary,
+                                color = LiveCastTheme.colors.onTopBar,
                                 style = LiveCastTheme.typography.body2
                             )
                         }
@@ -80,7 +80,7 @@ fun MyDevicesScreen(
                         TextButton(onClick = onSignOut) {
                             Text(
                                 text = "Sign out",
-                                color = LiveCastTheme.colors.onPrimary,
+                                color = LiveCastTheme.colors.onTopBar,
                                 style = LiveCastTheme.typography.body2
                             )
                         }

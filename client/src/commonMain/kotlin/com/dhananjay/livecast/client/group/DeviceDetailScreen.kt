@@ -56,19 +56,19 @@ fun DeviceDetailScreen(
                     Text(
                         text = "App activity",
                         style = LiveCastTheme.typography.h2,
-                        color = LiveCastTheme.colors.onPrimary
+                        color = LiveCastTheme.colors.onTopBar
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Text(
                             text = "←",
-                            color = LiveCastTheme.colors.onPrimary,
+                            color = LiveCastTheme.colors.onTopBar,
                             style = LiveCastTheme.typography.h2
                         )
                     }
                 },
-                backgroundColor = LiveCastTheme.colors.primary,
+                backgroundColor = LiveCastTheme.colors.topBar,
             )
         },
         backgroundColor = LiveCastTheme.colors.background,

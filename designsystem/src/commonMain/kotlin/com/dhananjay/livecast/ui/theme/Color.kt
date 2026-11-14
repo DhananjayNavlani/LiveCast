@@ -80,6 +80,9 @@ data class LiveCastColors(
     val textDisabled: Color,
     val scrim: Color,
     val elevation: Color,
+    /** App bar background. Dark themes use a raised surface instead of the inverted brand colour. */
+    val topBar: Color,
+    val onTopBar: Color,
 )
 
 internal val LightColors =
@@ -109,6 +112,8 @@ internal val LightColors =
         textDisabled = Gray400,
         scrim = Color.Black.copy(alpha = 0.32f),
         elevation = Gray700,
+        topBar = Black,
+        onTopBar = White,
     )
 
 internal val DarkColors =
@@ -138,6 +143,8 @@ internal val DarkColors =
         textDisabled = Gray600,
         scrim = Color.Black.copy(alpha = 0.72f),
         elevation = Gray200,
+        topBar = Gray900,
+        onTopBar = White,
     )
 
 val LocalLiveCastColors = staticCompositionLocalOf { LightColors }
@@ -154,6 +161,7 @@ fun LiveCastColors.contentColorFor(backgroundColor: Color): Color {
         success -> onSuccess
         disabled -> onDisabled
         background -> onBackground
+        topBar -> onTopBar
         else -> Color.Unspecified
     }
 }

@@ -37,15 +37,15 @@ fun VerifyEmailScreen(
                     Text(
                         text = "Verify Email",
                         style = LiveCastTheme.typography.h2,
-                        color = LiveCastTheme.colors.onPrimary
+                        color = LiveCastTheme.colors.onTopBar
                     )
                 },
-                backgroundColor = LiveCastTheme.colors.primary,
+                backgroundColor = LiveCastTheme.colors.topBar,
                 actions = {
                     TextButton(onClick = onSignOut) {
                         Text(
                             text = "Sign out",
-                            color = LiveCastTheme.colors.onPrimary,
+                            color = LiveCastTheme.colors.onTopBar,
                             style = LiveCastTheme.typography.body2
                         )
                     }

@@ -77,15 +77,15 @@ fun GroupManagementScreen(
                     Text(
                         text = "Group Management",
                         style = LiveCastTheme.typography.h2,
-                        color = LiveCastTheme.colors.onPrimary
+                        color = LiveCastTheme.colors.onTopBar
                     )
                 },
-                backgroundColor = LiveCastTheme.colors.primary,
+                backgroundColor = LiveCastTheme.colors.topBar,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Text(
                             text = "←",
-                            color = LiveCastTheme.colors.onPrimary,
+                            color = LiveCastTheme.colors.onTopBar,
                             style = LiveCastTheme.typography.h2
                         )
                     }

@@ -1,5 +1,7 @@
 package com.dhananjay.livecast.client.ui
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -7,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.dhananjay.livecast.auth.LoginViewModel
 import com.dhananjay.livecast.client.group.ClientGate
@@ -34,75 +37,83 @@ fun ClientApp(
         val uiState by viewModel.uiState.collectAsState()
         val gate = clientGate(uiState.user)
 
-        when (gate) {
-            ClientGate.SIGN_IN -> {
-                ClientLoginScreen(viewModel = viewModel)
-            }
+        // Paint the theme background under every screen: the desktop window is white by default,
+        // and Material components take their content colour from this Surface.
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = LiveCastTheme.colors.background,
+            contentColor = LiveCastTheme.colors.onBackground,
+        ) {
+            when (gate) {
+                ClientGate.SIGN_IN -> {
+                    ClientLoginScreen(viewModel = viewModel)
+                }
 
-            ClientGate.GUEST -> {
-                MyDevicesScreen(
-                    onManageGroups = {},
-                    onDeviceClick = {},
-                    onSignOut = { viewModel.signOut() }
-                )
-            }
+                ClientGate.GUEST -> {
+                    MyDevicesScreen(
+                        onManageGroups = {},
+                        onDeviceClick = {},
+                        onSignOut = { viewModel.signOut() }
+                    )
+                }
 
-            ClientGate.VERIFY_EMAIL -> {
-                VerifyEmailScreen(
-                    onSignOut = { viewModel.signOut() }
-                )
-            }
+                ClientGate.VERIFY_EMAIL -> {
+                    VerifyEmailScreen(
+                        onSignOut = { viewModel.signOut() }
+                    )
+                }
 
-            ClientGate.READY -> {
-                var currentScreen by remember { mutableStateOf<ClientScreen>(ClientScreen.MyDevices) }
+                ClientGate.READY -> {
+                    var currentScreen by remember { mutableStateOf<ClientScreen>(ClientScreen.MyDevices) }
 
-                when (val screen = currentScreen) {
-                    is ClientScreen.MyDevices -> {
-                        MyDevicesScreen(
-                            onManageGroups = { currentScreen = ClientScreen.GroupManagement },
-                            onDeviceClick = { device ->
-                                val groupId = device.groupId
-                                if (groupId != null) {
-                                    currentScreen = ClientScreen.DeviceDetail(device, groupId)
-                                }
-                            },
-                            onSignOut = { viewModel.signOut() }
-                        )
-                    }
-
-                    is ClientScreen.GroupManagement -> {
-                        GroupManagementScreen(
-                            onBack = { currentScreen = ClientScreen.MyDevices }
-                        )
-                    }
-
-                    is ClientScreen.DeviceDetail -> {
-                        val uid = uiState.user?.id ?: ""
-                        CompositionLocalProvider(
-                            LocalViewModelStoreOwner provides rememberScopedViewModelStoreOwner(uid, screen.device.id, screen.groupId)
-                        ) {
-                            DeviceDetailScreen(
-                                deviceId = screen.device.id,
-                                groupId = screen.groupId,
-                                deviceName = screen.device.displayName,
-                                onBack = { currentScreen = ClientScreen.MyDevices },
-                                onOpenViewer = { currentScreen = ClientScreen.Viewer(screen.device) }
+                    when (val screen = currentScreen) {
+                        is ClientScreen.MyDevices -> {
+                            MyDevicesScreen(
+                                onManageGroups = { currentScreen = ClientScreen.GroupManagement },
+                                onDeviceClick = { device ->
+                                    val groupId = device.groupId
+                                    if (groupId != null) {
+                                        currentScreen = ClientScreen.DeviceDetail(device, groupId)
+                                    }
+                                },
+                                onSignOut = { viewModel.signOut() }
                             )
                         }
-                    }
 
-                    is ClientScreen.Viewer -> {
-                        ViewerScreen(
-                            viewModel = viewModel,
-                            onBack = {
-                                val groupId = screen.device.groupId
-                                if (groupId != null) {
-                                    currentScreen = ClientScreen.DeviceDetail(screen.device, groupId)
-                                } else {
-                                    currentScreen = ClientScreen.MyDevices
-                                }
+                        is ClientScreen.GroupManagement -> {
+                            GroupManagementScreen(
+                                onBack = { currentScreen = ClientScreen.MyDevices }
+                            )
+                        }
+
+                        is ClientScreen.DeviceDetail -> {
+                            val uid = uiState.user?.id ?: ""
+                            CompositionLocalProvider(
+                                LocalViewModelStoreOwner provides rememberScopedViewModelStoreOwner(uid, screen.device.id, screen.groupId)
+                            ) {
+                                DeviceDetailScreen(
+                                    deviceId = screen.device.id,
+                                    groupId = screen.groupId,
+                                    deviceName = screen.device.displayName,
+                                    onBack = { currentScreen = ClientScreen.MyDevices },
+                                    onOpenViewer = { currentScreen = ClientScreen.Viewer(screen.device) }
+                                )
                             }
-                        )
+                        }
+
+                        is ClientScreen.Viewer -> {
+                            ViewerScreen(
+                                viewModel = viewModel,
+                                onBack = {
+                                    val groupId = screen.device.groupId
+                                    if (groupId != null) {
+                                        currentScreen = ClientScreen.DeviceDetail(screen.device, groupId)
+                                    } else {
+                                        currentScreen = ClientScreen.MyDevices
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
