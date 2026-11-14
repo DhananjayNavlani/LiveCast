@@ -1,5 +1,6 @@
 package com.dhananjay.livecast.group
 
+import com.dhananjay.livecast.agent.DeviceStatusSource
 import com.dhananjay.livecast.agent.EnrollmentNotifier
 import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
@@ -761,5 +762,72 @@ class EnrollmentViewModelTest {
 
         assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
         assertEquals(listOf("uid1" to "g1"), notifier.calls)
+    }
+
+    private class FakeDeviceStatusSource(
+        var notifications: Boolean = true,
+        var accessibility: Boolean = false
+    ) : DeviceStatusSource {
+        override fun accessibilityOn(): Boolean = accessibility
+        override fun notificationsOn(): Boolean = notifications
+    }
+
+    @Test
+    fun confirmBlockedWithoutNotifications() = runTest {
+        val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
+        val session = FakeSessionProvider(user)
+        val verifier = FakeEmailVerifier(session)
+        val deviceInfo = FakeHostDeviceInfoProvider()
+        val directory = FakeEnrollmentDirectory()
+        val registry = FakeDeviceRegistry()
+        val status = FakeDeviceStatusSource(notifications = false)
+
+        val candidate = EnrollmentCandidate(
+            group = Group(id = "g1", name = "Family", ownerUid = "o1", createdAtEpochMs = 1000L),
+            supervisors = listOf(GroupMember("g1", "mum@x.com", GroupRole.OWNER, "Mum", 100L))
+        )
+        directory.candidatesResult = Result.success(listOf(candidate))
+        registry.flowFor("uid1").tryEmit(
+            HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
+        )
+
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = status)
+        advanceUntilIdle()
+
+        vm.confirm()
+        advanceUntilIdle()
+
+        val current = vm.state.value as EnrollmentUiState.Confirm
+        assertEquals(0, registry.enrollCalls.size)
+        assertEquals("Allow notifications so this phone can show it is supervised.", current.error)
+    }
+
+    @Test
+    fun confirmProceedsWithNotifications() = runTest {
+        val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
+        val session = FakeSessionProvider(user)
+        val verifier = FakeEmailVerifier(session)
+        val deviceInfo = FakeHostDeviceInfoProvider()
+        val directory = FakeEnrollmentDirectory()
+        val registry = FakeDeviceRegistry()
+        val status = FakeDeviceStatusSource(notifications = true)
+
+        val candidate = EnrollmentCandidate(
+            group = Group(id = "g1", name = "Family", ownerUid = "o1", createdAtEpochMs = 1000L),
+            supervisors = listOf(GroupMember("g1", "mum@x.com", GroupRole.OWNER, "Mum", 100L))
+        )
+        directory.candidatesResult = Result.success(listOf(candidate))
+        registry.flowFor("uid1").tryEmit(
+            HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
+        )
+
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = status)
+        advanceUntilIdle()
+
+        vm.confirm()
+        advanceUntilIdle()
+
+        assertEquals(1, registry.enrollCalls.size)
+        assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
     }
 }

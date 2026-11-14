@@ -75,4 +75,31 @@ class AppScopeEnrollmentNotifierTest {
         assertEquals(listOf("uid1" to "g1"), recording.calls)
         appScope.cancel()
     }
+
+    @Test
+    fun callsListenersInOrder() = runTest {
+        val appScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+        val order = mutableListOf<String>()
+        val l1 = object : EnrollmentListener {
+            override suspend fun onEnrolled(deviceId: String, groupId: String) {
+                order.add("l1")
+            }
+        }
+        val l2 = object : EnrollmentListener {
+            override suspend fun onEnrolled(deviceId: String, groupId: String) {
+                order.add("l2")
+            }
+        }
+        val l3 = object : EnrollmentListener {
+            override suspend fun onEnrolled(deviceId: String, groupId: String) {
+                order.add("l3")
+            }
+        }
+        val notifier = AppScopeEnrollmentNotifier(listOf(l1, l2, l3), appScope)
+        notifier.notifyEnrolled("d1", "g1")
+        advanceUntilIdle()
+
+        assertEquals(listOf("l1", "l2", "l3"), order)
+        appScope.cancel()
+    }
 }

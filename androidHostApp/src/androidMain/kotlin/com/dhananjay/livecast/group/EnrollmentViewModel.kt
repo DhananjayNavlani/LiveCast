@@ -3,6 +3,7 @@ package com.dhananjay.livecast.group
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dhananjay.livecast.agent.DeviceStatusSource
 import com.dhananjay.livecast.agent.EnrollmentNotifier
 import com.dhananjay.livecast.auth.AuthResult
 import com.dhananjay.livecast.auth.AuthState
@@ -36,7 +37,8 @@ sealed interface EnrollmentUiState {
         val candidate: EnrollmentCandidate,
         val canGoBack: Boolean,
         val busy: Boolean = false,
-        val error: String? = null
+        val error: String? = null,
+        val notificationsOn: Boolean = true
     ) : EnrollmentUiState
     data class Enrolled(val groupId: String) : EnrollmentUiState
     data class Error(val message: String) : EnrollmentUiState
@@ -49,7 +51,8 @@ class EnrollmentViewModel(
     private val deviceInfo: HostDeviceInfoProvider,
     private val directory: EnrollmentDirectory,
     private val registry: DeviceRegistry,
-    private val notifier: EnrollmentNotifier? = null
+    private val notifier: EnrollmentNotifier? = null,
+    private val status: DeviceStatusSource? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<EnrollmentUiState>(EnrollmentUiState.Loading)
@@ -143,7 +146,11 @@ class EnrollmentViewModel(
                     lastCandidates = candidates
                     when (candidates.size) {
                         0 -> _state.value = EnrollmentUiState.NotMember(email)
-                        1 -> _state.value = EnrollmentUiState.Confirm(candidate = candidates[0], canGoBack = false)
+                        1 -> _state.value = EnrollmentUiState.Confirm(
+                            candidate = candidates[0],
+                            canGoBack = false,
+                            notificationsOn = status?.notificationsOn() ?: true
+                        )
                         else -> _state.value = EnrollmentUiState.ChooseGroup(candidates = candidates)
                     }
                 },
@@ -226,7 +233,11 @@ class EnrollmentViewModel(
     fun choose(groupId: String) {
         val candidate = lastCandidates.firstOrNull { it.group.id == groupId }
         if (candidate != null) {
-            _state.value = EnrollmentUiState.Confirm(candidate = candidate, canGoBack = true)
+            _state.value = EnrollmentUiState.Confirm(
+                candidate = candidate,
+                canGoBack = true,
+                notificationsOn = status?.notificationsOn() ?: true
+            )
         }
     }
 
@@ -237,10 +248,25 @@ class EnrollmentViewModel(
         }
     }
 
+    fun refreshNotifications() {
+        val current = _state.value
+        if (current is EnrollmentUiState.Confirm) {
+            val granted = status?.notificationsOn() ?: true
+            _state.value = current.copy(
+                notificationsOn = granted,
+                error = if (granted && current.error == NOTIFICATIONS_REQUIRED) null else current.error
+            )
+        }
+    }
+
     fun confirm() {
         val current = _state.value
         if (current is EnrollmentUiState.Confirm) {
             if (current.busy) return
+            if (status?.notificationsOn() == false) {
+                _state.value = current.copy(error = NOTIFICATIONS_REQUIRED)
+                return
+            }
             val user = (session.authState.value as? AuthState.Authenticated)?.user ?: return
             _state.value = current.copy(busy = true, error = null)
             viewModelScope.launch {
@@ -267,5 +293,9 @@ class EnrollmentViewModel(
                 )
             }
         }
+    }
+
+    companion object {
+        const val NOTIFICATIONS_REQUIRED = "Allow notifications so this phone can show it is supervised."
     }
 }

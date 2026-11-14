@@ -132,7 +132,8 @@ fun LiveCastNavigation(
                             inclusive = true
                         }
                     }
-                }
+                },
+                onRefreshNotifications = enrollmentViewModel::refreshNotifications
             )
         }
         composable<Routes.LoginScreen> {

@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.dhananjay.livecast.agent.AccessibilityStatusCard
 import com.dhananjay.livecast.cast.data.PermissionManager
 import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
@@ -180,23 +181,13 @@ fun StageScreen(
                 }
             }
         } else {
-            val context = LocalContext.current
-            Column(
-                modifier = modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
             ) {
-                val isEnabled = permissionManager.isAccessibilityEnabled()
-
-                Text("Accessibility Service is ${if (isEnabled) "enabled" else "disabled"}")
-                if (!isEnabled) {
-                    Button(
-                        onClick = {
-                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                        },
-                    ) {
-                        Text(text = "Enable Accessibility Service")
-                    }
-                }
+                AccessibilityStatusCard()
             }
         }
 

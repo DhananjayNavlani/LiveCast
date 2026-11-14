@@ -3,13 +3,16 @@ package com.dhananjay.livecast.di
 import android.util.Log
 import androidx.work.WorkManager
 import com.dhananjay.livecast.MainViewModel
+import com.dhananjay.livecast.agent.AccessibilityStateReporter
+import com.dhananjay.livecast.agent.AccessibilityStatusViewModel
 import com.dhananjay.livecast.agent.AgentNotifications
 import com.dhananjay.livecast.agent.AgentOffNoticeChecker
-import com.dhananjay.livecast.agent.AccessibilityStateReporter
 import com.dhananjay.livecast.agent.AndroidAgentNotifications
 import com.dhananjay.livecast.agent.AndroidDeviceStatusSource
+import com.dhananjay.livecast.agent.AndroidInstallSourceProvider
 import com.dhananjay.livecast.agent.AndroidInstalledAppsSource
 import com.dhananjay.livecast.agent.AndroidPackageChangeRegistrar
+import com.dhananjay.livecast.agent.AppBaselineResetListener
 import com.dhananjay.livecast.agent.AppBaselineStore
 import com.dhananjay.livecast.agent.AppChangeMonitor
 import com.dhananjay.livecast.agent.AppEventWriter
@@ -28,6 +31,7 @@ import com.dhananjay.livecast.agent.FirestorePushTokenStore
 import com.dhananjay.livecast.agent.HostAgent
 import com.dhananjay.livecast.agent.HostAgentControl
 import com.dhananjay.livecast.agent.HostAgentRestartListener
+import com.dhananjay.livecast.agent.InstallSourceProvider
 import com.dhananjay.livecast.agent.InstalledAppsSource
 import com.dhananjay.livecast.agent.PackageChangeRegistrar
 import com.dhananjay.livecast.agent.PushTokenRegistry
@@ -108,12 +112,13 @@ val appModule = module {
     single<GroupMembersDirectory> { FirestoreGroupMembersDirectory(get()) }
     single<EnrollmentNotifier> {
         AppScopeEnrollmentNotifier(
-            listOf(get<PushTokenRegistry>(), get<HostAgentRestartListener>()),
+            listOf(get<AppBaselineResetListener>(), get<PushTokenRegistry>(), get<HostAgentRestartListener>()),
             get(named("appScope"))
         )
     }
-    viewModel { EnrollmentViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { EnrollmentViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { SupervisedByViewModel(get(), get(), get()) }
+    viewModel { AccessibilityStatusViewModel(get(), get()) }
 
     single { FirebaseMessaging.getInstance() }
     single(named("appScope")) {
@@ -134,6 +139,8 @@ val appModule = module {
     single<WallClock> { SystemWallClock() }
     single<InstalledAppsSource> { AndroidInstalledAppsSource(androidContext()) }
     single<AppBaselineStore> { SharedPreferencesAppBaselineStore(androidContext()) }
+    single { AppBaselineResetListener(get()) }
+    single<InstallSourceProvider> { AndroidInstallSourceProvider(androidContext()) }
     single<AppEventWriter> { FirestoreAppEventWriter(get()) }
     single<PackageChangeRegistrar> { AndroidPackageChangeRegistrar(androidContext(), get()) }
     single { AccessibilityStateReporter(get(), get(), get(), get(), get(named("appScope"))) }

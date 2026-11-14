@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="turn_on_accessibility"
+        android:enabled="true"
+        android:icon="@drawable/ic_stat_supervised"
+        android:shortcutShortLabel="@string/shortcut_turn_on_accessibility">
+        <intent
+            android:action="com.dhananjay.livecast.action.REENABLE_ACCESSIBILITY"
+            android:targetPackage="com.dhananjay.livecast"
+            android:targetClass="com.dhananjay.livecast.MainActivity" />
+    </shortcut>
+</shortcuts>

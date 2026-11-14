@@ -1,5 +1,12 @@
 package com.dhananjay.livecast.group
 
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,11 +24,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dhananjay.livecast.protocol.GroupRules
 import com.dhananjay.livecast.ui.components.LiveCastButton
 import com.dhananjay.livecast.ui.components.LiveCastButtonVariant
@@ -38,8 +52,14 @@ fun EnrollmentScreen(
     onBack: () -> Unit,
     onConfirm: () -> Unit,
     onSignOut: () -> Unit,
+    onRefreshNotifications: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    LifecycleResumeEffect(Unit) {
+        onRefreshNotifications()
+        onPauseOrDispose { }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -210,6 +230,37 @@ fun EnrollmentScreen(
             }
 
             is EnrollmentUiState.Confirm -> {
+                val context = LocalContext.current
+                val activity = context as? Activity
+                var requestedPermission by rememberSaveable { mutableStateOf(false) }
+
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission()
+                ) {
+                    onRefreshNotifications()
+                }
+
+                val onAllowNotifications = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (requestedPermission && activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
+                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        } else {
+                            requestedPermission = true
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    } else {
+                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
+                }
+
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -221,7 +272,22 @@ fun EnrollmentScreen(
                         color = LiveCastTheme.colors.text,
                         textAlign = TextAlign.Center
                     )
-                    if (state.error != null) {
+                    if (!state.notificationsOn) {
+                        VerticalSpacer(16)
+                        Text(
+                            text = "Allow notifications so this phone can show it is supervised.",
+                            style = LiveCastTheme.typography.body2,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                        VerticalSpacer(12)
+                        LiveCastButton(
+                            text = "Allow notifications",
+                            onClick = onAllowNotifications,
+                            variant = LiveCastButtonVariant.Primary,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else if (state.error != null) {
                         VerticalSpacer(16)
                         Text(
                             text = state.error,
@@ -239,6 +305,7 @@ fun EnrollmentScreen(
                         text = "Continue",
                         onClick = onConfirm,
                         variant = LiveCastButtonVariant.Primary,
+                        enabled = state.notificationsOn && !state.busy,
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (state.canGoBack) {

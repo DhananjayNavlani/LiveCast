@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
+import com.dhananjay.livecast.agent.ReEnableIntents
 import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.data.repositories.AuthRepository
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleIntent(intent)
         setContent {
             // Using shared LiveCastTheme from commonMain
             LiveCastTheme {
@@ -105,6 +107,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.action == ACTION_REENABLE_ACCESSIBILITY) {
+            startActivity(ReEnableIntents.accessibilitySettings(this))
+        }
+    }
+
+    companion object {
+        const val ACTION_REENABLE_ACCESSIBILITY = "com.dhananjay.livecast.action.REENABLE_ACCESSIBILITY"
     }
 }
 
