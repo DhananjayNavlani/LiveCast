@@ -26,7 +26,7 @@ The child's phone must stay visibly supervised, and turning the agent back on mu
   - The supervisor sees the host's accessibility state (on, off, or unknown) and when it was last reported.
   - The supervisor sees a device's recent app installs and removals.
   - On the host, re-enabling accessibility takes one tap from the persistent "Accessibility is off" notification or the launcher shortcut to the settings toggle, or two taps via the home-screen card. Sideloaded installs get a guided "Allow restricted settings" step first.
-  - Supervision stays visible: the host never hides its icon or disables itself, and notification permission is required at enrollment and reported to the parent.
+  - Supervision stays visible: slice 2 adds no new way to hide the icon or disable the agent, and notification permission is required at enrollment and reported to the parent. The existing closed experimental feature (the `config.showIcon` launcher toggle and the `ACTION_STOP_ACCESSILIBITY_SERVICE` → `disableSelf()` path) stays as it is (user decision, 2026-11-14).
   - The service builds into one Docker image, configured only by environment variables.
 - **Non-goals (later):**
   - Deploying the service.
@@ -182,8 +182,7 @@ The child's phone must stay visibly supervised, and turning the agent back on mu
 **Agent: the existing `cast.data.services.AccessibilityService`:**
 - **Legacy cleanup in `LiveCastService.startObservers()`:**
   - **Stop calling `remoteDataSource.setUserOnline(...)`.** That's the 30 s `users/{uid}` heartbeat loop. Only the legacy "online users" list on other hosts' Stage screens reads a host's `is_online`; the web app writes its own `is_online` and never reads a host's, so web viewers still appear there.
-  - **Delete the `config.showIcon` observer that disables `.LauncherAlias`**, since a hidden icon is covert.
-  - **Delete the `ACTION_STOP_ACCESSILIBITY_SERVICE` → `disableSelf()` path** and its sender in `MainActivity`. The viewer sign-in that sent it is dead since the host became broadcaster-only.
+  - **Keep** the `config.showIcon` launcher toggle and the `ACTION_STOP_ACCESSILIBITY_SERVICE` → `disableSelf()` path untouched. They are a closed experimental feature (user decision, 2026-11-14). When `disableSelf()` runs, the normal stop path reports `accessibility: off` and shows the off notice.
   - The gesture and key-event observers for remote input stay.
 - `onServiceConnected` keeps the remaining observers and also calls `HostAgent.start()`.
 - `onUnbind` and `onDestroy` call `HostAgent.stop()`.
@@ -265,7 +264,7 @@ The child's phone must stay visibly supervised, and turning the agent back on mu
 1. Removed app events take their label from the on-device baseline. On the first run the phone writes no events, only a baseline.
 2. App updates are not reported. System apps are excluded.
 3. Every time the agent starts, it diffs the full installed-app list against the baseline, rather than using `getChangedPackages` (whose sequence numbers reset on reboot).
-4. The agent stops running the legacy `users/{uid}` 30 s heartbeat. Only other hosts' legacy online list read it, and web viewers still show there. The legacy icon-hiding and self-disable paths are deleted as covert.
+4. The agent stops running the legacy `users/{uid}` 30 s heartbeat. Only other hosts' legacy online list read it, and web viewers still show there. The experimental `showIcon` toggle and self-disable path are kept (user decision).
 5. Notification permission is required at enrollment. A later revoke is reported to the parent and does not stop monitoring.
 6. When the agent stops, its "Supervised by" notification turns into an "Accessibility is off" notification. A boot/update receiver and a launcher shortcut make re-enabling one tap.
 7. App events carry `groupId` and a device-reported time. The baseline resets on each enrollment.
