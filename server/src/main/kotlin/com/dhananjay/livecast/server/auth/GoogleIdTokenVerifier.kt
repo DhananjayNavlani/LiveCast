@@ -7,6 +7,7 @@ import com.dhananjay.livecast.server.VerifiedCaller
 import com.nimbusds.jose.JWSAlgorithm
 import com.nimbusds.jose.crypto.RSASSAVerifier
 import com.nimbusds.jwt.SignedJWT
+import kotlin.coroutines.cancellation.CancellationException
 
 class GoogleIdTokenVerifier(
     private val keys: PublicKeySource,
@@ -17,6 +18,8 @@ class GoogleIdTokenVerifier(
     override suspend fun verify(idToken: String): VerifiedCaller? {
         val jwt = try {
             SignedJWT.parse(idToken)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             return null
         }
@@ -24,15 +27,13 @@ class GoogleIdTokenVerifier(
         if (jwt.header.algorithm != JWSAlgorithm.RS256) return null
 
         val kid = jwt.header.keyID ?: return null
-        val publicKeyMap = try {
-            keys.keys()
-        } catch (_: Exception) {
-            return null
-        }
+        val publicKeyMap = keys.keys()
         val publicKey = publicKeyMap[kid] ?: return null
 
         val verified = try {
             jwt.verify(RSASSAVerifier(publicKey))
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             false
         }
@@ -44,7 +45,7 @@ class GoogleIdTokenVerifier(
         if (claims.issuer != expectedIssuer) return null
 
         val audList = claims.audience
-        if (audList == null || projectId !in audList) return null
+        if (audList != listOf(projectId)) return null
 
         val sub = claims.subject
         if (sub.isNullOrEmpty()) return null
@@ -53,7 +54,7 @@ class GoogleIdTokenVerifier(
         if (email.isNullOrBlank()) return null
 
         val emailVerified = claims.getClaim("email_verified")
-        if (emailVerified != true && emailVerified != "true") return null
+        if (emailVerified != true) return null
 
         val nowSec = clock.nowMs() / 1000
         val exp = claims.expirationTime?.time?.div(1000) ?: return null

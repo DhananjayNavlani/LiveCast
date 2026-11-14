@@ -41,12 +41,8 @@ export PORT=8080
 
 ## Building and Packaging
 
-Build fat JAR:
+Two-step container build:
 ```bash
 ./gradlew :server:buildFatJar
-```
-
-Build Docker container:
-```bash
-docker build -f server/Dockerfile -t livecast-server .
+docker build -f server/Dockerfile -t livecast-server:dev .
 ```

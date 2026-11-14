@@ -17,98 +17,138 @@ import kotlin.test.assertTrue
 
 class RoutesTest {
 
-    private class TestCheckService(var outcome: CheckOutcome) : CheckService(
-        verifier = object : IdTokenVerifier {
-            override suspend fun verify(idToken: String): VerifiedCaller = VerifiedCaller("u1", "u@e.com")
-        },
-        devices = object : DeviceDirectory {
-            override suspend fun groupOf(deviceId: String): String? = "g1"
-            override suspend fun pushTokenOf(deviceId: String): String? = "tok"
-        },
-        members = object : MembershipDirectory {
-            override suspend fun roleOf(groupId: String, email: String): GroupRole? = GroupRole.OWNER
-        },
-        push = object : PushSender {
-            override suspend fun sendCheck(token: String, checkId: String): PushResult = PushResult.Sent
-        },
-        limiter = object : CheckRateLimiter {
-            override fun tryAcquire(callerUid: String, deviceId: String, nowMs: Long): Boolean = true
-        },
-        ids = object : IdGenerator {
-            override fun newId(): String = "c1"
-        },
-        clock = object : Clock {
-            override fun nowMs(): Long = 0L
+    private class FakeVerifier : IdTokenVerifier {
+        var caller: VerifiedCaller? = VerifiedCaller("u1", "u@e.com")
+        var lastToken: String? = null
+        override suspend fun verify(idToken: String): VerifiedCaller? {
+            lastToken = idToken
+            return caller
         }
-    ) {
-        override suspend fun requestCheck(bearerToken: String?, deviceId: String): CheckOutcome = outcome
+    }
+
+    private class FakeDevices : DeviceDirectory {
+        var groupId: String? = "g1"
+        var pushToken: String? = "tok"
+        var throwError: Boolean = false
+        override suspend fun groupOf(deviceId: String): String? {
+            if (throwError) throw UpstreamException("timeout")
+            return groupId
+        }
+        override suspend fun pushTokenOf(deviceId: String): String? = pushToken
+    }
+
+    private class FakeMembers : MembershipDirectory {
+        var role: GroupRole? = GroupRole.OWNER
+        override suspend fun roleOf(groupId: String, email: String): GroupRole? = role
+    }
+
+    private class FakePush : PushSender {
+        var result: PushResult = PushResult.Sent
+        override suspend fun sendCheck(token: String, checkId: String): PushResult = result
+    }
+
+    private class FakeLimiter : CheckRateLimiter {
+        var allow: Boolean = true
+        override fun tryAcquire(callerUid: String, deviceId: String, nowMs: Long): Boolean = allow
+    }
+
+    private class FakeIds : IdGenerator {
+        var id: String = "c-123"
+        override fun newId(): String = id
+    }
+
+    private class FakeClock : Clock {
+        override fun nowMs(): Long = 0L
     }
 
     @Test
     fun eachOutcomeMapsToStatusAndBody() = testApplication {
-        val checkService = TestCheckService(CheckOutcome.Sent("c-123"))
+        val verifier = FakeVerifier()
+        val devices = FakeDevices()
+        val members = FakeMembers()
+        val push = FakePush()
+        val limiter = FakeLimiter()
+        val ids = FakeIds()
+        val clock = FakeClock()
+
+        val checkService = CheckService(verifier, devices, members, push, limiter, ids, clock)
+
         application {
             livecastModule(checkService, emptyList())
         }
 
         // 1. Sent
-        checkService.outcome = CheckOutcome.Sent("c-123")
         var resp = client.post("/v1/devices/d1/checks") {
-            header(HttpHeaders.Authorization, "Bearer token")
+            header(HttpHeaders.Authorization, "Bearer test-token-123")
         }
         assertEquals(HttpStatusCode.Accepted, resp.status)
         assertTrue(resp.bodyAsText().contains("c-123"))
+        assertEquals("test-token-123", verifier.lastToken)
 
-        // 2. Unauthorized
-        checkService.outcome = CheckOutcome.Unauthorized
-        resp = client.post("/v1/devices/d1/checks")
-        assertEquals(HttpStatusCode.Unauthorized, resp.status)
-        assertTrue(resp.bodyAsText().contains("unauthorized"))
+        // 2. Unauthorized - no header
+        val respNoHeader = client.post("/v1/devices/d1/checks")
+        assertEquals(HttpStatusCode.Unauthorized, respNoHeader.status)
+        assertTrue(respNoHeader.bodyAsText().contains("unauthorized"))
+
+        // 2. Unauthorized - invalid token
+        verifier.caller = null
+        val respInvalid = client.post("/v1/devices/d1/checks") {
+            header(HttpHeaders.Authorization, "Bearer bad-token-xyz")
+        }
+        assertEquals(HttpStatusCode.Unauthorized, respInvalid.status)
+        assertTrue(respInvalid.bodyAsText().contains("unauthorized"))
+        assertEquals("bad-token-xyz", verifier.lastToken)
 
         // 3. DeviceNotFound
-        checkService.outcome = CheckOutcome.DeviceNotFound
+        verifier.caller = VerifiedCaller("u1", "u@e.com")
+        devices.groupId = null
         resp = client.post("/v1/devices/d1/checks") {
-            header(HttpHeaders.Authorization, "Bearer token")
+            header(HttpHeaders.Authorization, "Bearer test-token-123")
         }
         assertEquals(HttpStatusCode.NotFound, resp.status)
         assertTrue(resp.bodyAsText().contains("device_not_found"))
 
         // 4. Forbidden
-        checkService.outcome = CheckOutcome.Forbidden
+        devices.groupId = "g1"
+        members.role = GroupRole.DEVICE
         resp = client.post("/v1/devices/d1/checks") {
-            header(HttpHeaders.Authorization, "Bearer token")
+            header(HttpHeaders.Authorization, "Bearer test-token-123")
         }
         assertEquals(HttpStatusCode.Forbidden, resp.status)
         assertTrue(resp.bodyAsText().contains("forbidden"))
 
         // 5. RateLimited
-        checkService.outcome = CheckOutcome.RateLimited
+        members.role = GroupRole.OWNER
+        limiter.allow = false
         resp = client.post("/v1/devices/d1/checks") {
-            header(HttpHeaders.Authorization, "Bearer token")
+            header(HttpHeaders.Authorization, "Bearer test-token-123")
         }
         assertEquals(HttpStatusCode.TooManyRequests, resp.status)
         assertTrue(resp.bodyAsText().contains("rate_limited"))
 
         // 6. NoPushToken
-        checkService.outcome = CheckOutcome.NoPushToken
+        limiter.allow = true
+        devices.pushToken = null
         resp = client.post("/v1/devices/d1/checks") {
-            header(HttpHeaders.Authorization, "Bearer token")
+            header(HttpHeaders.Authorization, "Bearer test-token-123")
         }
         assertEquals(HttpStatusCode.Conflict, resp.status)
         assertTrue(resp.bodyAsText().contains("no_push_token"))
 
         // 7. AppRemoved
-        checkService.outcome = CheckOutcome.AppRemoved
+        devices.pushToken = "tok"
+        push.result = PushResult.Unregistered
         resp = client.post("/v1/devices/d1/checks") {
-            header(HttpHeaders.Authorization, "Bearer token")
+            header(HttpHeaders.Authorization, "Bearer test-token-123")
         }
         assertEquals(HttpStatusCode.Gone, resp.status)
         assertTrue(resp.bodyAsText().contains("app_removed"))
 
         // 8. UpstreamFailed
-        checkService.outcome = CheckOutcome.UpstreamFailed("timeout")
+        push.result = PushResult.Sent
+        devices.throwError = true
         resp = client.post("/v1/devices/d1/checks") {
-            header(HttpHeaders.Authorization, "Bearer token")
+            header(HttpHeaders.Authorization, "Bearer test-token-123")
         }
         assertEquals(HttpStatusCode.BadGateway, resp.status)
         assertTrue(resp.bodyAsText().contains("upstream_error"))
@@ -116,7 +156,9 @@ class RoutesTest {
 
     @Test
     fun healthzOk() = testApplication {
-        val checkService = TestCheckService(CheckOutcome.Sent("c1"))
+        val checkService = CheckService(
+            FakeVerifier(), FakeDevices(), FakeMembers(), FakePush(), FakeLimiter(), FakeIds(), FakeClock()
+        )
         application {
             livecastModule(checkService, emptyList())
         }
@@ -126,7 +168,9 @@ class RoutesTest {
 
     @Test
     fun corsPreflightAllowedOrigin() = testApplication {
-        val checkService = TestCheckService(CheckOutcome.Sent("c1"))
+        val checkService = CheckService(
+            FakeVerifier(), FakeDevices(), FakeMembers(), FakePush(), FakeLimiter(), FakeIds(), FakeClock()
+        )
         application {
             livecastModule(checkService, listOf("http://localhost:3000"))
         }

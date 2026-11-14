@@ -98,4 +98,18 @@ class FcmHttpV1PushSenderTest {
         val result = sender500.sendCheck("tok", "c1")
         assertTrue(result is PushResult.Failed)
     }
+
+    @Test
+    fun errorMentioningUnregisteredInMessageIsFailed() = runTest {
+        val engine = MockEngine {
+            respond(
+                content = """{"error":{"code":500,"message":"Found UNREGISTERED in log message but no error code details"}}""",
+                status = HttpStatusCode.InternalServerError,
+                headers = headersOf(HttpHeaders.ContentType to listOf("application/json"))
+            )
+        }
+        val sender = FcmHttpV1PushSender(HttpClient(engine), "my-proj", FakeAccessTokenProvider())
+        val result = sender.sendCheck("tok", "c1")
+        assertTrue(result is PushResult.Failed)
+    }
 }

@@ -2,11 +2,12 @@ package com.dhananjay.livecast.server.check
 
 import com.dhananjay.livecast.protocol.CheckRules
 import com.dhananjay.livecast.protocol.GroupRole
+import com.dhananjay.livecast.protocol.GroupRules
 import com.dhananjay.livecast.server.*
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-open class CheckService(
+class CheckService(
     private val verifier: IdTokenVerifier,
     private val devices: DeviceDirectory,
     private val members: MembershipDirectory,
@@ -15,7 +16,7 @@ open class CheckService(
     private val ids: IdGenerator,
     private val clock: Clock,
 ) {
-    open suspend fun requestCheck(bearerToken: String?, deviceId: String): CheckOutcome {
+    suspend fun requestCheck(bearerToken: String?, deviceId: String): CheckOutcome {
         try {
             if (bearerToken.isNullOrBlank()) return CheckOutcome.Unauthorized
             val token = if (bearerToken.startsWith("Bearer ", ignoreCase = true)) {
@@ -27,9 +28,13 @@ open class CheckService(
 
             val caller = verifier.verify(token) ?: return CheckOutcome.Unauthorized
 
+            if (deviceId.isBlank() || "/" in deviceId) {
+                return CheckOutcome.DeviceNotFound
+            }
+
             val groupId = devices.groupOf(deviceId) ?: return CheckOutcome.DeviceNotFound
 
-            val role = members.roleOf(groupId, caller.email.trim().lowercase())
+            val role = members.roleOf(groupId, GroupRules.normalizeEmail(caller.email))
             if (role != GroupRole.OWNER && role != GroupRole.SUPERVISOR) {
                 return CheckOutcome.Forbidden
             }

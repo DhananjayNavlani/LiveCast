@@ -5,6 +5,7 @@ import com.dhananjay.livecast.server.PublicKeySource
 import com.dhananjay.livecast.server.VerifiedCaller
 import com.nimbusds.jose.JWSAlgorithm
 import com.nimbusds.jose.JWSHeader
+import com.nimbusds.jose.crypto.MACSigner
 import com.nimbusds.jose.crypto.RSASSASigner
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator
 import com.nimbusds.jwt.JWTClaimsSet
@@ -41,7 +42,7 @@ class GoogleIdTokenVerifierTest {
         audience: String = projectId,
         subject: String = "u1",
         email: String? = "user@example.com",
-        emailVerified: Boolean? = true,
+        emailVerified: Any? = true,
         issueTime: Date = Date(clock.nowMs() - 10_000L),
         expirationTime: Date = Date(clock.nowMs() + 3600_000L),
         customSigner: RSASSASigner? = signer,
@@ -80,6 +81,23 @@ class GoogleIdTokenVerifierTest {
     }
 
     @Test
+    fun multipleAudiencesRejected() = runTest {
+        val verifier = GoogleIdTokenVerifier(keySource, projectId, clock)
+        val claims = JWTClaimsSet.Builder()
+            .issuer("https://securetoken.google.com/$projectId")
+            .audience(listOf(projectId, "another-audience"))
+            .subject("u1")
+            .claim("email", "user@example.com")
+            .claim("email_verified", true)
+            .issueTime(Date(clock.nowMs()))
+            .expirationTime(Date(clock.nowMs() + 3600_000L))
+            .build()
+        val jwt = SignedJWT(JWSHeader.Builder(JWSAlgorithm.RS256).keyID("k1").build(), claims)
+        jwt.sign(signer)
+        assertNull(verifier.verify(jwt.serialize()))
+    }
+
+    @Test
     fun wrongIssuerRejected() = runTest {
         val verifier = GoogleIdTokenVerifier(keySource, projectId, clock)
         val token = buildToken(issuer = "https://wrong.issuer.com")
@@ -102,6 +120,13 @@ class GoogleIdTokenVerifierTest {
 
         val tokenNull = buildToken(emailVerified = null)
         assertNull(verifier.verify(tokenNull))
+    }
+
+    @Test
+    fun stringEmailVerifiedRejected() = runTest {
+        val verifier = GoogleIdTokenVerifier(keySource, projectId, clock)
+        val token = buildToken(emailVerified = "true")
+        assertNull(verifier.verify(token))
     }
 
     @Test
@@ -135,5 +160,47 @@ class GoogleIdTokenVerifierTest {
         val plainJwt = PlainJWT(claims)
         val token = plainJwt.serialize()
         assertNull(verifier.verify(token))
+    }
+
+    @Test
+    fun hs256Rejected() = runTest {
+        val verifier = GoogleIdTokenVerifier(keySource, projectId, clock)
+        val sharedSecret = ByteArray(32) { 1 }
+        val macSigner = MACSigner(sharedSecret)
+        val claims = JWTClaimsSet.Builder()
+            .issuer("https://securetoken.google.com/$projectId")
+            .audience(projectId)
+            .subject("u1")
+            .claim("email", "user@example.com")
+            .claim("email_verified", true)
+            .issueTime(Date(clock.nowMs()))
+            .expirationTime(Date(clock.nowMs() + 3600_000L))
+            .build()
+        val jwt = SignedJWT(
+            JWSHeader.Builder(JWSAlgorithm.HS256).keyID("k1").build(),
+            claims
+        )
+        jwt.sign(macSigner)
+        assertNull(verifier.verify(jwt.serialize()))
+    }
+
+    @Test
+    fun rs512Rejected() = runTest {
+        val verifier = GoogleIdTokenVerifier(keySource, projectId, clock)
+        val claims = JWTClaimsSet.Builder()
+            .issuer("https://securetoken.google.com/$projectId")
+            .audience(projectId)
+            .subject("u1")
+            .claim("email", "user@example.com")
+            .claim("email_verified", true)
+            .issueTime(Date(clock.nowMs()))
+            .expirationTime(Date(clock.nowMs() + 3600_000L))
+            .build()
+        val jwt = SignedJWT(
+            JWSHeader.Builder(JWSAlgorithm.RS512).keyID("k1").build(),
+            claims
+        )
+        jwt.sign(signer)
+        assertNull(verifier.verify(jwt.serialize()))
     }
 }

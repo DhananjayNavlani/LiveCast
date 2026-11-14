@@ -21,6 +21,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import kotlin.coroutines.cancellation.CancellationException
 
 class FcmHttpV1PushSender(
     private val httpClient: HttpClient,
@@ -35,6 +36,8 @@ class FcmHttpV1PushSender(
         val accessToken = tokenProvider?.let {
             try {
                 it.token()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 return PushResult.Failed("Failed to obtain access token: ${e.message}")
             }
@@ -75,13 +78,14 @@ class FcmHttpV1PushSender(
             } else {
                 PushResult.Failed("FCM send failed: ${response.status.value} $bodyText")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             PushResult.Failed(e.message ?: "FCM request failed")
         }
     }
 
     private fun isUnregisteredError(bodyText: String): Boolean {
-        if (bodyText.contains("UNREGISTERED")) return true
         return try {
             val root = json.parseToJsonElement(bodyText).jsonObject
             val error = root["error"]?.jsonObject ?: return false
@@ -89,6 +93,8 @@ class FcmHttpV1PushSender(
             details.any { detail ->
                 detail.jsonObject["errorCode"]?.jsonPrimitive?.content == "UNREGISTERED"
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             false
         }

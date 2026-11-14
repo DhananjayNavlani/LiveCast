@@ -203,4 +203,42 @@ class CheckServiceTest {
         val result = service.requestCheck("Bearer valid", "d1")
         assertTrue(result is CheckOutcome.UpstreamFailed)
     }
+
+    @Test
+    fun keySourceOutageUpstream() = runTest {
+        val outageKeySource = object : PublicKeySource {
+            override suspend fun keys(): Map<String, java.security.interfaces.RSAPublicKey> {
+                throw UpstreamException("Google certs server unavailable")
+            }
+        }
+        val verifier = com.dhananjay.livecast.server.auth.GoogleIdTokenVerifier(outageKeySource, "test-proj", FakeClock())
+        val rsaKey = com.nimbusds.jose.jwk.gen.RSAKeyGenerator(2048).keyID("k1").generate()
+        val signer = com.nimbusds.jose.crypto.RSASSASigner(rsaKey)
+        val jwt = com.nimbusds.jwt.SignedJWT(
+            com.nimbusds.jose.JWSHeader.Builder(com.nimbusds.jose.JWSAlgorithm.RS256).keyID("k1").build(),
+            com.nimbusds.jwt.JWTClaimsSet.Builder().build()
+        )
+        jwt.sign(signer)
+        val token = jwt.serialize()
+
+        val service = createService(verifier = verifier)
+        val result = service.requestCheck("Bearer $token", "d1")
+        assertEquals(CheckOutcome.UpstreamFailed("Google certs server unavailable"), result)
+    }
+
+    @Test
+    fun slashDeviceIdNotFound() = runTest {
+        var directoryCalled = false
+        val devices = object : DeviceDirectory {
+            override suspend fun groupOf(deviceId: String): String? {
+                directoryCalled = true
+                return "g1"
+            }
+            override suspend fun pushTokenOf(deviceId: String): String? = null
+        }
+        val service = createService(devices = devices)
+        val result = service.requestCheck("Bearer valid", "dev/1")
+        assertEquals(CheckOutcome.DeviceNotFound, result)
+        kotlin.test.assertFalse(directoryCalled)
+    }
 }

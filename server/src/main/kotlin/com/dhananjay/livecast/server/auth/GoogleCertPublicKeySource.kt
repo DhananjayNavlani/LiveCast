@@ -17,6 +17,7 @@ import java.io.ByteArrayInputStream
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.interfaces.RSAPublicKey
+import kotlin.coroutines.cancellation.CancellationException
 
 class GoogleCertPublicKeySource(
     private val httpClient: HttpClient,
@@ -74,6 +75,7 @@ class GoogleCertPublicKeySource(
                 cachedUntilMs = lockedNow + (maxAgeSeconds * 1000L)
                 parsedKeys
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 if (e is UpstreamException) throw e
                 throw UpstreamException("Error fetching or parsing Google public certs", e)
             }

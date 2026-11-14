@@ -10,6 +10,7 @@ import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLPathPart
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -78,6 +79,21 @@ class FirestoreRestDirectoryEmulatorTest {
 
         seedDocument(client, "groups/g-test/members/member@example.com", """{"role": {"stringValue": "supervisor"}}""")
         val role = directory.roleOf("g-test", "member@example.com")
+        assertEquals(GroupRole.SUPERVISOR, role)
+    }
+
+    @Test
+    fun roleOfFindsMemberWithPlusInEmail() = runTest {
+        if (emulatorHost.isNullOrBlank()) return@runTest
+        val client = HttpClient(CIO) {
+            install(ContentNegotiation) { json() }
+        }
+        val directory = FirestoreRestDirectory(client, projectId, tokenProvider = null, emulatorHost = emulatorHost)
+
+        val email = "mom+kid@x.com"
+        val encodedEmail = email.encodeURLPathPart()
+        seedDocument(client, "groups/g-plus/members/$encodedEmail", """{"role": {"stringValue": "supervisor"}}""")
+        val role = directory.roleOf("g-plus", email)
         assertEquals(GroupRole.SUPERVISOR, role)
     }
 
