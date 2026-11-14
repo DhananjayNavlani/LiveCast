@@ -26,6 +26,50 @@ export PORT=8080
 ./gradlew :server:run
 ```
 
+## Local Run Against `livecast-b73ad` (dev)
+
+1. Get a service-account key once: Firebase console → Project settings → Service accounts → **Generate new private key**. Save it as `~/.livecast/server-sa.json` and run `chmod 600 ~/.livecast/server-sa.json`. Never put it in the repo. The key grants admin access to the project; delete it (Google Cloud console → IAM → Service accounts → Keys) once Cloud Run is up.
+2. Start the server: `server/run-local.sh` (port 8090; 8080 belongs to the Firestore emulator).
+3. Point the clients at it:
+   - desktop: `livecast_server_url=http://localhost:8090` in `~/.livecast/config.properties` (or env `LIVECAST_SERVER_URL`);
+   - Android debug: `livecast.serverUrl=http://localhost:8090` in `local.properties`, then run `adb reverse tcp:8090 tcp:8090` for each connected phone or emulator. Debug builds allow cleartext only to `localhost`, `127.0.0.1` and `10.0.2.2` (`androidClientApp/src/debug`); release builds need an HTTPS URL.
+4. Smoke test: `curl -i localhost:8090/healthz` → `200`; `curl -i -X POST localhost:8090/v1/devices/x/checks` → `401`.
+
+## Deploy to Cloud Run (later)
+
+Runs as a dedicated service account through the metadata server (`GoogleCredentials.getApplicationDefault()`), so no key file exists.
+
+1. Switch the Firebase project to the Blaze plan, then install the CLI and log in:
+   ```bash
+   brew install --cask google-cloud-sdk
+   gcloud auth login
+   gcloud config set project livecast-b73ad
+   gcloud services enable run.googleapis.com artifactregistry.googleapis.com fcm.googleapis.com firestore.googleapis.com
+   ```
+2. Least-privilege service account (Firestore read + FCM send only):
+   ```bash
+   gcloud iam service-accounts create livecast-check --display-name "LiveCast check server"
+   SA=livecast-check@livecast-b73ad.iam.gserviceaccount.com
+   gcloud projects add-iam-policy-binding livecast-b73ad --member "serviceAccount:$SA" --role roles/datastore.viewer
+   gcloud projects add-iam-policy-binding livecast-b73ad --member "serviceAccount:$SA" --role roles/firebasecloudmessaging.admin
+   ```
+3. Image registry, build and push (Apple silicon builds an amd64 image):
+   ```bash
+   gcloud artifacts repositories create livecast --repository-format docker --location asia-south1
+   gcloud auth configure-docker asia-south1-docker.pkg.dev
+   ./gradlew :server:buildFatJar
+   IMAGE=asia-south1-docker.pkg.dev/livecast-b73ad/livecast/server:$(git rev-parse --short HEAD)
+   docker build --platform linux/amd64 -f server/Dockerfile -t "$IMAGE" .
+   docker push "$IMAGE"
+   ```
+4. Deploy. The endpoint does its own Firebase ID-token auth, so Cloud Run IAM auth stays off. One instance keeps the in-memory rate limiter consistent:
+   ```bash
+   gcloud run deploy livecast-check --image "$IMAGE" --region asia-south1 --service-account "$SA" \
+     --allow-unauthenticated --set-env-vars FIREBASE_PROJECT_ID=livecast-b73ad \
+     --min-instances 0 --max-instances 1 --cpu-boost --memory 512Mi
+   ```
+5. Use the printed `https://…run.app` URL as `livecast.serverUrl` (Android, `local.properties` or `-Plivecast.serverUrl=`) and `livecast_server_url` (desktop). Then delete the local dev key.
+
 ## Endpoints
 
 - `GET /healthz`: Health check endpoint, returns 200 OK.
