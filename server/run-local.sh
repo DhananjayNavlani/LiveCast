@@ -21,7 +21,7 @@ if [[ ! -f "$KEY" ]]; then
   echo "save it as $KEY and run: chmod 600 $KEY" >&2
   exit 1
 fi
-if [[ -n "$(find "$KEY" -perm +044 2>/dev/null)" ]]; then
+if [[ -n "$(find -L "$KEY" -perm +044 2>/dev/null)" ]]; then   # -L: check a symlink's target
   echo "WARNING: $KEY is readable by other users; run: chmod 600 $KEY" >&2
 fi
 
