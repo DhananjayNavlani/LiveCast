@@ -79,6 +79,20 @@ class AccessibilityStatusViewModelTest {
         assertTrue(vm.state.value.showRestrictedStep)
         vm.skipRestrictedStep()
         assertFalse(vm.state.value.showRestrictedStep)
+
+        // refresh while still off -> hidden
+        vm.refresh()
+        assertFalse(vm.state.value.showRestrictedStep)
+
+        // then on -> refresh
+        status.accessibility = true
+        vm.refresh()
+        assertFalse(vm.state.value.showRestrictedStep)
+
+        // off -> refresh -> step shown again
+        status.accessibility = false
+        vm.refresh()
+        assertTrue(vm.state.value.showRestrictedStep)
     }
 
     @Test

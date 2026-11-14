@@ -145,6 +145,16 @@ class EnrollmentViewModelTest {
         }
     }
 
+    private class FakeDeviceStatusSource(
+        var notifications: Boolean = true,
+        var accessibility: Boolean = false
+    ) : DeviceStatusSource {
+        override fun accessibilityOn(): Boolean = accessibility
+        override fun notificationsOn(): Boolean = notifications
+    }
+
+    private val defaultStatus = FakeDeviceStatusSource(notifications = true)
+
     @Test
     fun alreadyEnrolledShowsEnrolled() = runTest {
         val user = User(id = "uid1", email = "kid@x.com", displayName = "Kid", emailVerified = true)
@@ -158,7 +168,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = "g1")
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
@@ -177,7 +187,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.NoEmail, vm.state.value)
@@ -196,7 +206,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.VerifyEmail(email = "kid@x.com"), vm.state.value)
@@ -224,7 +234,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertTrue(vm.state.value is EnrollmentUiState.VerifyEmail)
@@ -259,7 +269,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         vm.checkVerification()
@@ -284,7 +294,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         vm.checkVerification()
@@ -309,7 +319,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.NotMember("kid@x.com"), vm.state.value)
@@ -337,7 +347,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         val expected = EnrollmentUiState.Confirm(candidate, canGoBack = false)
@@ -368,7 +378,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.ChooseGroup(candidates), vm.state.value)
@@ -398,7 +408,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         vm.confirm()
@@ -432,7 +442,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         vm.confirm()
@@ -462,7 +472,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         vm.confirm()
@@ -490,7 +500,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = "g1")
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
@@ -520,7 +530,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.Error("Network failure"), vm.state.value)
@@ -554,7 +564,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "user-b", displayName = "Pixel 8", model = "Pixel 8", groupId = "g2")
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
@@ -589,7 +599,7 @@ class EnrollmentViewModelTest {
             }
         }
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         assertEquals(EnrollmentUiState.Error("Device listener failed"), vm.state.value)
@@ -636,7 +646,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceUntilIdle()
 
         vm.retry()
@@ -686,7 +696,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "user-b", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, status = defaultStatus)
         advanceTimeBy(100L)
         session.authStateFlow.value = AuthState.Authenticated(userB)
         advanceUntilIdle()
@@ -725,7 +735,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, notifier)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, notifier, defaultStatus)
         advanceUntilIdle()
 
         vm.confirm()
@@ -754,7 +764,7 @@ class EnrollmentViewModelTest {
             HostDevice(id = "uid1", displayName = "Pixel 8", model = "Pixel 8", groupId = null)
         )
 
-        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, notifier)
+        val vm = EnrollmentViewModel(session, verifier, deviceInfo, directory, registry, notifier, defaultStatus)
         advanceUntilIdle()
 
         vm.confirm()
@@ -762,14 +772,6 @@ class EnrollmentViewModelTest {
 
         assertEquals(EnrollmentUiState.Enrolled("g1"), vm.state.value)
         assertEquals(listOf("uid1" to "g1"), notifier.calls)
-    }
-
-    private class FakeDeviceStatusSource(
-        var notifications: Boolean = true,
-        var accessibility: Boolean = false
-    ) : DeviceStatusSource {
-        override fun accessibilityOn(): Boolean = accessibility
-        override fun notificationsOn(): Boolean = notifications
     }
 
     @Test

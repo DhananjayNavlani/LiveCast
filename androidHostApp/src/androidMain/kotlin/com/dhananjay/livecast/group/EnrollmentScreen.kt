@@ -2,9 +2,8 @@ package com.dhananjay.livecast.group
 
 import android.Manifest
 import android.app.Activity
-import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -25,9 +24,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,7 +31,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.dhananjay.livecast.agent.ReEnableIntents
 import com.dhananjay.livecast.protocol.GroupRules
 import com.dhananjay.livecast.ui.components.LiveCastButton
 import com.dhananjay.livecast.ui.components.LiveCastButtonVariant
@@ -232,32 +230,23 @@ fun EnrollmentScreen(
             is EnrollmentUiState.Confirm -> {
                 val context = LocalContext.current
                 val activity = context as? Activity
-                var requestedPermission by rememberSaveable { mutableStateOf(false) }
 
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission()
-                ) {
+                ) { isGranted ->
                     onRefreshNotifications()
+                    if (!isGranted && activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
+                        context.startActivity(ReEnableIntents.appNotificationSettings(context))
+                    }
                 }
 
                 val onAllowNotifications = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        if (requestedPermission && activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)) {
-                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        } else {
-                            requestedPermission = true
-                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
+                    val isGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                    if (isGranted) {
+                        context.startActivity(ReEnableIntents.appNotificationSettings(context))
                     } else {
-                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }
 

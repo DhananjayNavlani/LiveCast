@@ -3,7 +3,7 @@
     <shortcut
         android:shortcutId="turn_on_accessibility"
         android:enabled="true"
-        android:icon="@drawable/ic_stat_supervised"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_turn_on_accessibility">
         <intent
             android:action="com.dhananjay.livecast.action.REENABLE_ACCESSIBILITY"

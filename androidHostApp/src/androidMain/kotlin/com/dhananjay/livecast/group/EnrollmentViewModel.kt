@@ -52,7 +52,7 @@ class EnrollmentViewModel(
     private val directory: EnrollmentDirectory,
     private val registry: DeviceRegistry,
     private val notifier: EnrollmentNotifier? = null,
-    private val status: DeviceStatusSource? = null
+    private val status: DeviceStatusSource
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<EnrollmentUiState>(EnrollmentUiState.Loading)
@@ -149,7 +149,7 @@ class EnrollmentViewModel(
                         1 -> _state.value = EnrollmentUiState.Confirm(
                             candidate = candidates[0],
                             canGoBack = false,
-                            notificationsOn = status?.notificationsOn() ?: true
+                            notificationsOn = status.notificationsOn()
                         )
                         else -> _state.value = EnrollmentUiState.ChooseGroup(candidates = candidates)
                     }
@@ -236,7 +236,7 @@ class EnrollmentViewModel(
             _state.value = EnrollmentUiState.Confirm(
                 candidate = candidate,
                 canGoBack = true,
-                notificationsOn = status?.notificationsOn() ?: true
+                notificationsOn = status.notificationsOn()
             )
         }
     }
@@ -251,7 +251,7 @@ class EnrollmentViewModel(
     fun refreshNotifications() {
         val current = _state.value
         if (current is EnrollmentUiState.Confirm) {
-            val granted = status?.notificationsOn() ?: true
+            val granted = status.notificationsOn()
             _state.value = current.copy(
                 notificationsOn = granted,
                 error = if (granted && current.error == NOTIFICATIONS_REQUIRED) null else current.error
@@ -263,7 +263,7 @@ class EnrollmentViewModel(
         val current = _state.value
         if (current is EnrollmentUiState.Confirm) {
             if (current.busy) return
-            if (status?.notificationsOn() == false) {
+            if (!status.notificationsOn()) {
                 _state.value = current.copy(error = NOTIFICATIONS_REQUIRED)
                 return
             }

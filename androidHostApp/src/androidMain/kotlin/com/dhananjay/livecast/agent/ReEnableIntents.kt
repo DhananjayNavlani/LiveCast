@@ -9,8 +9,14 @@ import android.provider.Settings
 import com.dhananjay.livecast.cast.data.services.AccessibilityService
 
 object ReEnableIntents {
+    const val ACTION_REENABLE_ACCESSIBILITY = "com.dhananjay.livecast.action.REENABLE_ACCESSIBILITY"
+
     private const val EXTRA_FRAGMENT_ARG_KEY = ":settings:fragment_args_key"
     private const val EXTRA_SHOW_FRAGMENT_ARGS = ":settings:show_fragment_args"
+
+    fun shouldHandleReEnable(action: String?, restored: Boolean, launchedFromHistory: Boolean): Boolean {
+        return action == ACTION_REENABLE_ACCESSIBILITY && !restored && !launchedFromHistory
+    }
 
     fun highlightExtras(flattenedComponent: String): Map<String, String> {
         return mapOf(EXTRA_FRAGMENT_ARG_KEY to flattenedComponent)
@@ -32,6 +38,13 @@ object ReEnableIntents {
     fun appDetails(context: Context): Intent {
         return Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", context.packageName, null)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+
+    fun appNotificationSettings(context: Context): Intent {
+        return Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     }

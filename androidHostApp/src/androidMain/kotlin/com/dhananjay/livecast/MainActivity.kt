@@ -73,7 +73,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleIntent(intent)
+        val currentIntent = intent
+        val launchedFromHistory = if (currentIntent != null) {
+            (currentIntent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        } else {
+            false
+        }
+        if (ReEnableIntents.shouldHandleReEnable(currentIntent?.action, savedInstanceState != null, launchedFromHistory)) {
+            startActivity(ReEnableIntents.accessibilitySettings(this))
+            setIntent(Intent(currentIntent).setAction(null))
+        }
         setContent {
             // Using shared LiveCastTheme from commonMain
             LiveCastTheme {
@@ -111,17 +120,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleIntent(intent)
-    }
-
-    private fun handleIntent(intent: Intent?) {
-        if (intent?.action == ACTION_REENABLE_ACCESSIBILITY) {
+        setIntent(intent)
+        if (intent.action == ReEnableIntents.ACTION_REENABLE_ACCESSIBILITY) {
             startActivity(ReEnableIntents.accessibilitySettings(this))
+            setIntent(Intent(intent).setAction(null))
         }
-    }
-
-    companion object {
-        const val ACTION_REENABLE_ACCESSIBILITY = "com.dhananjay.livecast.action.REENABLE_ACCESSIBILITY"
     }
 }
 

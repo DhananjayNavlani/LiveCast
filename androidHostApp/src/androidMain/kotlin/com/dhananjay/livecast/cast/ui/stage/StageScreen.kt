@@ -1,7 +1,5 @@
 package com.dhananjay.livecast.cast.ui.stage
 
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,7 +25,6 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.SignalCellular4Bar
 import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.IconButton
@@ -39,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,7 +43,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.dhananjay.livecast.agent.AccessibilityStatusCard
-import com.dhananjay.livecast.cast.data.PermissionManager
 import com.dhananjay.livecast.cast.data.model.LiveCastUser
 import com.dhananjay.livecast.cast.data.repositories.PreferencesRepository
 import com.dhananjay.livecast.group.SupervisedByUiState
@@ -63,7 +58,6 @@ fun StageScreen(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
     preferencesRepository: PreferencesRepository = koinInject(),
-    permissionManager: PermissionManager = koinInject(),
 ) {
 
     val user by preferencesRepository.getUser().collectAsStateWithLifecycle(null)
