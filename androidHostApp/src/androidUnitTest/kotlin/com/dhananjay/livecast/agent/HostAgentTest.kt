@@ -1,11 +1,17 @@
 package com.dhananjay.livecast.agent
 
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -128,5 +134,24 @@ class HostAgentTest {
 
         assertEquals(1, c1.stopCalls)
         assertEquals(1, c2.stopCalls)
+    }
+
+    @Test
+    fun agentScopeKeepsAppScopeHandlerAndDispatcher() {
+        val handler = CoroutineExceptionHandler { _, _ -> }
+        val dispatcher = StandardTestDispatcher()
+        val appJob = SupervisorJob()
+        val appScope = CoroutineScope(appJob + dispatcher + handler)
+        val c1 = FakeComponent()
+        val agent = HostAgent(listOf(c1), appScope)
+
+        agent.start()
+        val context = c1.lastScope!!.coroutineContext
+
+        assertSame(handler, context[CoroutineExceptionHandler])
+        assertSame(dispatcher, context[ContinuationInterceptor])
+        assertSame(appJob, context[Job]?.parent)
+        agent.stop()
+        appJob.cancel()
     }
 }

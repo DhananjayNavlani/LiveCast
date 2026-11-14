@@ -27,7 +27,8 @@ class HostAgent(
     fun start() {
         if (started) return
         started = true
-        val scope = CoroutineScope(SupervisorJob(appScope.coroutineContext[Job]))
+        // Child of the app scope's job; keeps its dispatcher and CoroutineExceptionHandler.
+        val scope = CoroutineScope(appScope.coroutineContext + SupervisorJob(appScope.coroutineContext[Job]))
         agentScope = scope
         for (component in components) {
             try {
