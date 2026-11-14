@@ -29,10 +29,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import com.dhananjay.livecast.agent.HostAgent
 import java.time.OffsetDateTime
 
 abstract class LiveCastService : AccessibilityService(), KoinComponent {
     private val TAG = javaClass.simpleName
+    private val hostAgent by inject<HostAgent>()
     private val signalingClient by inject<SignalingClient>()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val crashlytics by inject<FirebaseCrashlytics>()
@@ -76,6 +78,7 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        hostAgent.start()
 
         startObservers()
 
@@ -239,6 +242,7 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        hostAgent.stop()
         serviceScope.launch {
             remoteDataSource.setUserOffline()
         }
@@ -247,6 +251,11 @@ abstract class LiveCastService : AccessibilityService(), KoinComponent {
             "Accessbility service unbound at ${OffsetDateTime.now()}"
         )
         return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        hostAgent.stop()
+        super.onDestroy()
     }
 
 }

@@ -4,8 +4,15 @@ import android.util.Log
 import androidx.work.WorkManager
 import com.dhananjay.livecast.MainViewModel
 import com.dhananjay.livecast.agent.AgentNotifications
+import com.dhananjay.livecast.agent.AgentOffNoticeChecker
+import com.dhananjay.livecast.agent.AccessibilityStateReporter
 import com.dhananjay.livecast.agent.AndroidAgentNotifications
 import com.dhananjay.livecast.agent.AndroidDeviceStatusSource
+import com.dhananjay.livecast.agent.AndroidInstalledAppsSource
+import com.dhananjay.livecast.agent.AndroidPackageChangeRegistrar
+import com.dhananjay.livecast.agent.AppBaselineStore
+import com.dhananjay.livecast.agent.AppChangeMonitor
+import com.dhananjay.livecast.agent.AppEventWriter
 import com.dhananjay.livecast.agent.AppScopeEnrollmentNotifier
 import com.dhananjay.livecast.agent.CheckResponder
 import com.dhananjay.livecast.agent.DeviceRegistryEnrollmentState
@@ -15,11 +22,21 @@ import com.dhananjay.livecast.agent.EnrollmentListener
 import com.dhananjay.livecast.agent.EnrollmentNotifier
 import com.dhananjay.livecast.agent.EnrollmentState
 import com.dhananjay.livecast.agent.FirebasePushTokenSource
+import com.dhananjay.livecast.agent.FirestoreAppEventWriter
 import com.dhananjay.livecast.agent.FirestoreDeviceStatusWriter
 import com.dhananjay.livecast.agent.FirestorePushTokenStore
+import com.dhananjay.livecast.agent.HostAgent
+import com.dhananjay.livecast.agent.HostAgentControl
+import com.dhananjay.livecast.agent.HostAgentRestartListener
+import com.dhananjay.livecast.agent.InstalledAppsSource
+import com.dhananjay.livecast.agent.PackageChangeRegistrar
 import com.dhananjay.livecast.agent.PushTokenRegistry
 import com.dhananjay.livecast.agent.PushTokenSource
 import com.dhananjay.livecast.agent.PushTokenStore
+import com.dhananjay.livecast.agent.SharedPreferencesAppBaselineStore
+import com.dhananjay.livecast.agent.SupervisionNotifier
+import com.dhananjay.livecast.agent.SystemWallClock
+import com.dhananjay.livecast.agent.WallClock
 import com.dhananjay.livecast.analytics.Analytics
 import com.dhananjay.livecast.analytics.createAnalytics
 import com.dhananjay.livecast.cast.data.PermissionManager
@@ -89,7 +106,12 @@ val appModule = module {
     single<DeviceRegistry> { FirestoreDeviceRegistry(get()) }
     single<EnrollmentDirectory> { FirestoreEnrollmentDirectory(get()) }
     single<GroupMembersDirectory> { FirestoreGroupMembersDirectory(get()) }
-    single<EnrollmentNotifier> { AppScopeEnrollmentNotifier(getAll(), get(named("appScope"))) }
+    single<EnrollmentNotifier> {
+        AppScopeEnrollmentNotifier(
+            listOf(get<PushTokenRegistry>(), get<HostAgentRestartListener>()),
+            get(named("appScope"))
+        )
+    }
     viewModel { EnrollmentViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { SupervisedByViewModel(get(), get(), get()) }
 
@@ -108,6 +130,23 @@ val appModule = module {
     single { PushTokenRegistry(get(), get(), get(), get()) } bind EnrollmentListener::class
     single<AgentNotifications> { AndroidAgentNotifications(androidContext()) }
     single { CheckResponder(get(), get(), get(), get()) }
+
+    single<WallClock> { SystemWallClock() }
+    single<InstalledAppsSource> { AndroidInstalledAppsSource(androidContext()) }
+    single<AppBaselineStore> { SharedPreferencesAppBaselineStore(androidContext()) }
+    single<AppEventWriter> { FirestoreAppEventWriter(get()) }
+    single<PackageChangeRegistrar> { AndroidPackageChangeRegistrar(androidContext(), get()) }
+    single { AccessibilityStateReporter(get(), get(), get(), get(), get(named("appScope"))) }
+    single { AppChangeMonitor(get(), get(), get(), get(), get(), get(), get()) }
+    single { SupervisionNotifier(get(), get(), get(), get(named("appScope"))) }
+    single {
+        HostAgent(
+            listOf(get<AccessibilityStateReporter>(), get<AppChangeMonitor>(), get<SupervisionNotifier>()),
+            get(named("appScope"))
+        )
+    } bind HostAgentControl::class
+    single { HostAgentRestartListener(get<HostAgentControl>()) }
+    single { AgentOffNoticeChecker(get(), get(), get()) }
 
     single { WorkManager.getInstance(get()) }
 }
