@@ -28,47 +28,61 @@ export PORT=8080
 
 ## Local Run Against `livecast-b73ad` (dev)
 
-1. Get a service-account key once: Firebase console → Project settings → Service accounts → **Generate new private key**. Save it as `~/.livecast/server-sa.json` and run `chmod 600 ~/.livecast/server-sa.json`. Never put it in the repo. The key grants admin access to the project; delete it (Google Cloud console → IAM → Service accounts → Keys) once Cloud Run is up.
+1. Get a service-account key once: Firebase console → Project settings → Service accounts → **Generate new private key**. Save it as `~/.livecast/server-sa.json` and run `chmod 600 ~/.livecast/server-sa.json`. Never put it in the repo. The key grants admin access to the project; delete it (Google Cloud console → IAM → Service accounts → Keys) once a deployed server is up.
 2. Start the server: `server/run-local.sh` (port 8090; 8080 belongs to the Firestore emulator).
 3. Point the clients at it:
    - desktop: `livecast_server_url=http://localhost:8090` in `~/.livecast/config.properties` (or env `LIVECAST_SERVER_URL`);
    - Android debug: `livecast.serverUrl=http://localhost:8090` in `local.properties`, then run `adb reverse tcp:8090 tcp:8090` for each connected phone or emulator. Debug builds allow cleartext only to `localhost`, `127.0.0.1` and `10.0.2.2` (`androidClientApp/src/debug`); release builds need an HTTPS URL.
 4. Smoke test: `curl -i localhost:8090/healthz` → `200`; `curl -i -X POST localhost:8090/v1/devices/x/checks` → `401`.
 
-## Deploy to Cloud Run (later)
+## Deploying
 
-Runs as a dedicated service account through the metadata server (`GoogleCredentials.getApplicationDefault()`), so no key file exists.
+The server is a stateless container. It runs on any host that can run a Linux container or a JVM process and expose it over HTTPS: a serverless container platform, a PaaS, or a VM.
 
-1. Switch the Firebase project to the Blaze plan, then install the CLI and log in:
-   ```bash
-   brew install --cask google-cloud-sdk
-   gcloud auth login
-   gcloud config set project livecast-b73ad
-   gcloud services enable run.googleapis.com artifactregistry.googleapis.com fcm.googleapis.com firestore.googleapis.com
-   ```
-2. Least-privilege service account (Firestore read + FCM send only):
-   ```bash
-   gcloud iam service-accounts create livecast-check --display-name "LiveCast check server"
-   SA=livecast-check@livecast-b73ad.iam.gserviceaccount.com
-   gcloud projects add-iam-policy-binding livecast-b73ad --member "serviceAccount:$SA" --role roles/datastore.viewer
-   gcloud projects add-iam-policy-binding livecast-b73ad --member "serviceAccount:$SA" --role roles/firebasecloudmessaging.admin
-   ```
-3. Image registry, build and push (Apple silicon builds an amd64 image):
-   ```bash
-   gcloud artifacts repositories create livecast --repository-format docker --location asia-south1
-   gcloud auth configure-docker asia-south1-docker.pkg.dev
-   ./gradlew :server:buildFatJar
-   IMAGE=asia-south1-docker.pkg.dev/livecast-b73ad/livecast/server:$(git rev-parse --short HEAD)
-   docker build --platform linux/amd64 -f server/Dockerfile -t "$IMAGE" .
-   docker push "$IMAGE"
-   ```
-4. Deploy. The endpoint does its own Firebase ID-token auth, so Cloud Run IAM auth stays off. One instance keeps the in-memory rate limiter consistent:
-   ```bash
-   gcloud run deploy livecast-check --image "$IMAGE" --region asia-south1 --service-account "$SA" \
-     --allow-unauthenticated --set-env-vars FIREBASE_PROJECT_ID=livecast-b73ad \
-     --min-instances 0 --max-instances 1 --cpu-boost --memory 512Mi
-   ```
-5. Use the printed `https://…run.app` URL as `livecast.serverUrl` (Android, `local.properties` or `-Plivecast.serverUrl=`) and `livecast_server_url` (desktop). Then delete the local dev key.
+### 1. Build the artifact
+- Fat jar: `./gradlew :server:buildFatJar` → `server/build/libs/server-all.jar`. It needs a Java 25 runtime: `java -jar server-all.jar`.
+- Container image: build the jar first, then `docker build -f server/Dockerfile -t <registry>/<name>:<tag> .`. The Dockerfile only copies the prebuilt jar (the Gradle build needs the Android SDK, so it can't run inside the image), so a host that builds from git must run the Gradle step before `docker build`, or you push a prebuilt image to a registry the host can pull from.
+- Most hosts run `linux/amd64`. On Apple silicon add `--platform linux/amd64` to `docker build`.
+
+### 2. Configure the environment
+| Variable | Value |
+|---|---|
+| `FIREBASE_PROJECT_ID` | `livecast-b73ad` |
+| `PORT` | Usually injected by the host; defaults to `8080` |
+| `GOOGLE_CREDENTIALS_JSON` or `GOOGLE_APPLICATION_CREDENTIALS` | Only when the host can't provide a Google identity (see step 3) |
+| `CORS_ALLOWED_ORIGINS` | Only if a browser client calls the API |
+
+Never set `FIRESTORE_EMULATOR_HOST` in a deployment.
+
+### 3. Give it a Google identity with least privilege
+The server reads Firestore (`devices/{id}`, `devices/{id}/private/push`, `groups/{g}/members/{email}`) and sends FCM messages. It needs exactly these permissions on the project:
+- Firestore document read (`datastore.entities.get`, e.g. the *Cloud Datastore Viewer* role);
+- FCM send (`cloudmessaging.messages.create`, e.g. the *Firebase Cloud Messaging Admin* role).
+
+Create a dedicated service account with only those roles. Then, in order of preference:
+1. **Workload identity / attached service account.** On Google-hosted runtimes, attach the service account to the service and set no credential variables. The server then falls back to Application Default Credentials and no key file exists.
+2. **Secret environment variable.** On any other host, create a key for that service account and store its JSON in the host's secret manager as `GOOGLE_CREDENTIALS_JSON`. Never in the repo, the image, or plain config.
+3. **Mounted secret file.** Mount the key file read-only and point `GOOGLE_APPLICATION_CREDENTIALS` at it.
+
+Don't deploy with the Firebase Admin SDK key used for local development: it grants full project admin.
+
+### 4. Expose it
+- Serve HTTPS. The host's TLS termination or a reverse proxy in front is enough; the app speaks plain HTTP on `PORT`.
+- Allow unauthenticated traffic at the platform level. Every `/v1` request is authenticated by the server itself with the caller's Firebase ID token.
+- Health check: `GET /healthz` → `200`.
+
+### 5. Scale and timeouts
+- Run a single instance. The rate limiter is in memory, so several instances each allow a check every 10 s.
+- The client gives the `POST` 10 s. If the host scales to zero, the first request after idle pays JVM start-up plus the first certificate and access-token fetch, which can exceed that and show "Check failed". Use the host's start-up CPU boost if it has one, or keep one instance warm.
+- 512 MB of memory is enough.
+
+### 6. Verify and wire the clients
+1. `curl -i https://<host>/healthz` → `200`; `curl -i -X POST https://<host>/v1/devices/x/checks` → `401`.
+2. Set the HTTPS base URL (no trailing path) in the clients:
+   - Android: `livecast.serverUrl=https://<host>` in `local.properties`, or `-Plivecast.serverUrl=https://<host>` on the Gradle command line (release builds accept HTTPS only);
+   - desktop: `livecast_server_url=https://<host>` in `~/.livecast/config.properties`, or env `LIVECAST_SERVER_URL`.
+3. From a supervisor account, tap **Check** on an enrolled device: the row should end in "Online at HH:mm".
+4. Delete the local development key once the deployed server works.
 
 ## Endpoints
 
