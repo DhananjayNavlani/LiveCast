@@ -1,23 +1,28 @@
 package com.dhananjay.livecast.client.group
 
+import androidx.lifecycle.viewModelScope
 import com.dhananjay.livecast.auth.AuthState
 import com.dhananjay.livecast.auth.SessionProvider
 import com.dhananjay.livecast.auth.User
+import com.dhananjay.livecast.client.check.CheckRequestResult
+import com.dhananjay.livecast.client.check.CheckState
+import com.dhananjay.livecast.client.check.DeviceCheckService
 import com.dhananjay.livecast.protocol.Group
 import com.dhananjay.livecast.protocol.GroupMembership
 import com.dhananjay.livecast.protocol.GroupRole
-import com.dhananjay.livecast.protocol.GroupRules
 import com.dhananjay.livecast.protocol.HostDevice
+import com.dhananjay.livecast.protocol.ToggleState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -77,17 +82,14 @@ private class FakeGroupDeviceRepository : GroupDeviceRepository {
     }
 }
 
-private class FakePresenceClock(
-    var now: Long = 1_000_000L,
-) : PresenceClock {
-    val tickFlow = MutableSharedFlow<Unit>()
-    var requestedPeriodMs: Long? = null
+private class FakeDeviceCheckService(
+    var result: CheckRequestResult = CheckRequestResult.Requested("test-check-id")
+) : DeviceCheckService {
+    val requestedDevices = mutableListOf<String>()
 
-    override fun nowEpochMs(): Long = now
-
-    override fun ticks(periodMs: Long): Flow<Unit> {
-        requestedPeriodMs = periodMs
-        return tickFlow
+    override suspend fun requestCheck(deviceId: String): CheckRequestResult {
+        requestedDevices.add(deviceId)
+        return result
     }
 }
 
@@ -108,22 +110,23 @@ class MyDevicesViewModelTest {
 
     @Test
     fun guestSeesNoDevices() = runTest {
-        val clock = FakePresenceClock()
+        val checkService = FakeDeviceCheckService()
         val auth = FakeMyDevicesSessionProvider(User("u1", null, null, isAnonymous = true))
         val groupsRepo = FakeGroupRepository()
         val devicesRepo = FakeGroupDeviceRepository()
 
-        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
         assertTrue(viewModel.state.value.guest)
         assertFalse(groupsRepo.observeMembershipsCalled)
         assertEquals(emptyList(), viewModel.state.value.rows)
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
     fun listsDevicesOfViewableGroupsOnly() = runTest {
-        val clock = FakePresenceClock()
+        val checkService = FakeDeviceCheckService()
         val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
         val groupsRepo = FakeGroupRepository()
         val devicesRepo = FakeGroupDeviceRepository()
@@ -135,81 +138,221 @@ class MyDevicesViewModelTest {
             GroupMembership(g2, GroupRole.DEVICE)
         )
 
-        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
         assertEquals(listOf(listOf("g1")), devicesRepo.observedGroupIds)
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
-    fun onlineWithinTwoMinutes() = runTest {
-        val clock = FakePresenceClock(now = 1_000_000L)
+    fun checkOnlineWhenReplyArrives() = runTest {
         val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
         val groupsRepo = FakeGroupRepository()
         val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService(CheckRequestResult.Requested("chk-1"))
 
         val g1 = Group("g1", "Group 1", "u1", 1000L)
         groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
 
-        val dev1 = HostDevice("d1", "Dev 1", "Model 1", online = true, lastSeenEpochMs = 880_000L, groupId = "g1")
-        val dev2 = HostDevice("d2", "Dev 2", "Model 2", online = true, lastSeenEpochMs = 879_999L, groupId = "g1")
-        val dev3 = HostDevice("d3", "Dev 3", "Model 3", online = false, lastSeenEpochMs = 1_000_000L, groupId = "g1")
-        devicesRepo.devicesFlow.value = listOf(dev1, dev2, dev3)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
 
-        val viewModel = MyDevicesViewModel(
-            session = auth,
-            groups = groupsRepo,
-            devices = devicesRepo,
-            clock = clock,
-        )
+        viewModel.check("d1")
+        runCurrent()
+
+        assertEquals(CheckState.Checking, viewModel.state.value.rows.first().check)
+
+        val updatedDev = dev1.copy(lastCheckId = "chk-1", lastCheckAtEpochMs = 123456L)
+        devicesRepo.devicesFlow.value = listOf(updatedDev)
+        runCurrent()
+
+        assertEquals(CheckState.Online(123456L), viewModel.state.value.rows.first().check)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun checkOfflineAfterTimeout() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService(CheckRequestResult.Requested("chk-1"))
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+
+        assertEquals(CheckState.Checking, viewModel.state.value.rows.first().check)
+
+        advanceTimeBy(20_001L)
+        runCurrent()
+
+        assertEquals(CheckState.Offline, viewModel.state.value.rows.first().check)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun checkAppRemoved() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService(CheckRequestResult.AppRemoved)
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+
+        assertEquals(CheckState.AppRemoved, viewModel.state.value.rows.first().check)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun checkNotSetUp() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService(CheckRequestResult.NoPushToken)
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+
+        assertEquals(CheckState.NotSetUp, viewModel.state.value.rows.first().check)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun checkRateLimited() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService(CheckRequestResult.RateLimited)
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+
+        assertEquals(CheckState.RateLimited, viewModel.state.value.rows.first().check)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun doubleTapIgnoredWhileChecking() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService(CheckRequestResult.Requested("chk-1"))
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+        assertEquals(CheckState.Checking, viewModel.state.value.rows.first().check)
+        assertEquals(1, checkService.requestedDevices.size)
+
+        viewModel.check("d1")
+        runCurrent()
+        assertEquals(1, checkService.requestedDevices.size)
+        viewModel.viewModelScope.cancel()
+    }
+
+    @Test
+    fun userSwitchClearsCheckState() = runTest {
+        val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
+        val groupsRepo = FakeGroupRepository()
+        val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService(CheckRequestResult.AppRemoved)
+
+        val g1 = Group("g1", "Group 1", "u1", 1000L)
+        groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
+        val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
+        devicesRepo.devicesFlow.value = listOf(dev1)
+
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
+        runCurrent()
+
+        viewModel.check("d1")
+        runCurrent()
+        assertEquals(CheckState.AppRemoved, viewModel.state.value.rows.first().check)
+
+        auth.setUser(User("u2", "u2@x.com", "User 2", emailVerified = true))
         runCurrent()
 
         val rows = viewModel.state.value.rows
-        assertEquals(3, rows.size)
-        val row1 = rows.first { it.device.id == "d1" }
-        val row2 = rows.first { it.device.id == "d2" }
-        val row3 = rows.first { it.device.id == "d3" }
-
-        assertTrue(row1.online)
-        assertFalse(row2.online)
-        assertFalse(row3.online)
+        rows.forEach { assertEquals(CheckState.Idle, it.check) }
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
-    fun staleDeviceGoesOfflineOnTick() = runTest {
-        val clock = FakePresenceClock(now = 1_000_000L)
+    fun rowCarriesAccessibilityAndNotifications() = runTest {
         val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
         val groupsRepo = FakeGroupRepository()
         val devicesRepo = FakeGroupDeviceRepository()
+        val checkService = FakeDeviceCheckService()
 
         val g1 = Group("g1", "Group 1", "u1", 1000L)
         groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1, GroupRole.OWNER))
-
-        val dev1 = HostDevice("d1", "Dev 1", "Model 1", online = true, lastSeenEpochMs = 1_000_000L, groupId = "g1")
+        val dev1 = HostDevice(
+            id = "d1",
+            displayName = "Dev 1",
+            model = "Model 1",
+            groupId = "g1",
+            accessibility = ToggleState.ON,
+            notifications = ToggleState.OFF,
+            statusAtEpochMs = 5000L,
+        )
         devicesRepo.devicesFlow.value = listOf(dev1)
 
-        val viewModel = MyDevicesViewModel(
-            session = auth,
-            groups = groupsRepo,
-            devices = devicesRepo,
-            clock = clock,
-        )
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
-        assertEquals(GroupRules.PRESENCE_TICK_MS, clock.requestedPeriodMs)
-        assertTrue(viewModel.state.value.rows.first().online)
-
-        // Advance fake clock past 120_000 ms and emit one tick, with no snapshot change
-        clock.now += 135_000L
-        clock.tickFlow.emit(Unit)
-        runCurrent()
-
-        assertFalse(viewModel.state.value.rows.first().online)
+        val row = viewModel.state.value.rows.first()
+        assertEquals(ToggleState.ON, row.accessibility)
+        assertEquals(ToggleState.OFF, row.notifications)
+        assertEquals(5000L, row.statusAtEpochMs)
+        assertEquals(CheckState.Idle, row.check)
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
     fun onlyOwnerCanRemove() = runTest {
-        val clock = FakePresenceClock()
+        val checkService = FakeDeviceCheckService()
         val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
         val groupsRepo = FakeGroupRepository()
         val devicesRepo = FakeGroupDeviceRepository()
@@ -225,7 +368,7 @@ class MyDevicesViewModelTest {
         val dev2 = HostDevice("d2", "Dev 2", "Model 2", groupId = "g3")
         devicesRepo.devicesFlow.value = listOf(dev1, dev2)
 
-        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
         val row1 = viewModel.state.value.rows.first { it.device.id == "d1" }
@@ -233,20 +376,19 @@ class MyDevicesViewModelTest {
         assertTrue(row1.canRemove)
         assertFalse(row2.canRemove)
 
-        // Trying to remove non-removable device d2 does nothing
         viewModel.remove("d2")
         runCurrent()
         assertEquals(emptyList(), devicesRepo.removedDeviceIds)
 
-        // Removing removable device d1 calls repo
         viewModel.remove("d1")
         runCurrent()
         assertEquals(listOf("d1"), devicesRepo.removedDeviceIds)
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
     fun accessLostShowsMessage() = runTest {
-        val clock = FakePresenceClock()
+        val checkService = FakeDeviceCheckService()
         val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
         val groupsRepo = FakeGroupRepository()
         val devicesRepo = FakeGroupDeviceRepository()
@@ -262,10 +404,9 @@ class MyDevicesViewModelTest {
             }
         }
 
-        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
-        // 1. Emit one device and assert 1 row
         val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
         stream.send(listOf(dev1))
         runCurrent()
@@ -273,17 +414,17 @@ class MyDevicesViewModelTest {
         assertEquals(1, viewModel.state.value.rows.size)
         assertNull(viewModel.state.value.error)
 
-        // 2. Fail the flow with GroupError.AccessLost (supervisor removed while list open)
         stream.send(GroupError.AccessLost)
         runCurrent()
 
         assertEquals("You no longer have access", viewModel.state.value.error)
         assertEquals(emptyList(), viewModel.state.value.rows)
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
     fun userSwitchResetsDevices() = runTest {
-        val clock = FakePresenceClock()
+        val checkService = FakeDeviceCheckService()
         val userA = User("u1", "u1@x.com", "User 1", emailVerified = true)
         val userB = User("u2", null, null, isAnonymous = true)
         val auth = FakeMyDevicesSessionProvider(userA)
@@ -295,7 +436,7 @@ class MyDevicesViewModelTest {
         val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
         devicesRepo.devicesFlow.value = listOf(dev1)
 
-        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
         assertEquals(1, viewModel.state.value.rows.size)
@@ -305,11 +446,12 @@ class MyDevicesViewModelTest {
 
         assertTrue(viewModel.state.value.guest)
         assertEquals(emptyList(), viewModel.state.value.rows)
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
     fun verifiedUserSwitchResetsDevices() = runTest {
-        val clock = FakePresenceClock()
+        val checkService = FakeDeviceCheckService()
         val userA = User("u1", "a@x.com", "User A", emailVerified = true)
         val userB = User("u2", "b@x.com", "User B", emailVerified = true)
         val auth = FakeMyDevicesSessionProvider(userA)
@@ -321,23 +463,22 @@ class MyDevicesViewModelTest {
         val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
         devicesRepo.devicesFlow.value = listOf(dev1)
 
-        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
         assertEquals(1, viewModel.state.value.rows.size)
         val initialObserveCount = devicesRepo.observedGroupIds.size
 
-        // Switch to verified user B
         auth.setUser(userB)
         runCurrent()
 
-        // B starts with no rows and observeDevices was called again for B
         assertTrue(devicesRepo.observedGroupIds.size > initialObserveCount)
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
     fun sameViewableIdsDoNotResubscribe() = runTest {
-        val clock = FakePresenceClock()
+        val checkService = FakeDeviceCheckService()
         val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
         val groupsRepo = FakeGroupRepository()
         val devicesRepo = FakeGroupDeviceRepository()
@@ -347,26 +488,24 @@ class MyDevicesViewModelTest {
         val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
         devicesRepo.devicesFlow.value = listOf(dev1)
 
-        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
         assertEquals(1, devicesRepo.observedGroupIds.size)
         assertEquals("Group 1", viewModel.state.value.rows.first().groupName)
 
-        // Emit new snapshot with same viewableGroupIds (rename group)
         val g1Renamed = Group("g1", "Group 1 Renamed", "u1", 1000L)
         groupsRepo.membershipsFlow.value = listOf(GroupMembership(g1Renamed, GroupRole.OWNER))
         runCurrent()
 
-        // observeDevices should not be called again
         assertEquals(1, devicesRepo.observedGroupIds.size)
-        // But rows should reflect updated group name
         assertEquals("Group 1 Renamed", viewModel.state.value.rows.first().groupName)
+        viewModel.viewModelScope.cancel()
     }
 
     @Test
     fun removeFailureShowsError() = runTest {
-        val clock = FakePresenceClock()
+        val checkService = FakeDeviceCheckService()
         val auth = FakeMyDevicesSessionProvider(User("u1", "u1@x.com", "User 1", emailVerified = true))
         val groupsRepo = FakeGroupRepository()
         val devicesRepo = FakeGroupDeviceRepository().apply {
@@ -378,12 +517,13 @@ class MyDevicesViewModelTest {
         val dev1 = HostDevice("d1", "Dev 1", "Model 1", groupId = "g1")
         devicesRepo.devicesFlow.value = listOf(dev1)
 
-        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, clock)
+        val viewModel = MyDevicesViewModel(auth, groupsRepo, devicesRepo, checkService)
         runCurrent()
 
         viewModel.remove("d1")
         runCurrent()
 
         assertEquals("Failed to delete device", viewModel.state.value.error)
+        viewModel.viewModelScope.cancel()
     }
 }

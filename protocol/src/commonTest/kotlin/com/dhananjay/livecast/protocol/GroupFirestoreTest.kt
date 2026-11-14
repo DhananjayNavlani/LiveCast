@@ -85,12 +85,9 @@ class GroupFirestoreTest {
 
     @Test
     fun hostDeviceWithGroup() {
-        @Suppress("DEPRECATION")
         val data = mapOf(
             GroupFields.DISPLAY_NAME to "Pixel",
             GroupFields.MODEL to "P8",
-            GroupFields.ONLINE to true,
-            GroupFields.LAST_SEEN to 5000L,
             GroupFields.GROUP_ID to "g1",
             GroupFields.ENROLLED_AT to 4000L,
         )
@@ -99,10 +96,6 @@ class GroupFirestoreTest {
         assertEquals("d1", device.id)
         assertEquals("Pixel", device.displayName)
         assertEquals("P8", device.model)
-        @Suppress("DEPRECATION")
-        assertTrue(device.online)
-        @Suppress("DEPRECATION")
-        assertEquals(5000L, device.lastSeenEpochMs)
         assertEquals("g1", device.groupId)
         assertEquals(4000L, device.enrolledAtEpochMs)
     }
@@ -275,18 +268,6 @@ class GroupFirestoreTest {
             GroupFields.AT to 5000L,
         )
         assertNull(appEventFrom("e1", data))
-    }
-
-    @Test
-    fun heartbeatFieldsKeys() {
-        @Suppress("DEPRECATION")
-        val fields = GroupWrites.heartbeatFields(true, 2000L)
-        @Suppress("DEPRECATION")
-        assertEquals(setOf(GroupFields.ONLINE, GroupFields.LAST_SEEN), fields.keys)
-        @Suppress("DEPRECATION")
-        assertEquals(true, fields[GroupFields.ONLINE])
-        @Suppress("DEPRECATION")
-        assertEquals(2000L, fields[GroupFields.LAST_SEEN])
     }
 
     @Test

@@ -13,8 +13,6 @@ object GroupFields {
     const val HOST_UID = "hostUid"
     const val DISPLAY_NAME = "displayName"
     const val MODEL = "model"
-    const val ONLINE = "online"
-    const val LAST_SEEN = "lastSeen"
     const val ENROLLED_AT = "enrolledAt"
     const val ACCESSIBILITY = "accessibility"
     const val NOTIFICATIONS = "notifications"
@@ -61,10 +59,6 @@ fun groupMemberFrom(groupId: String, emailId: String, data: Map<String, Any?>): 
 fun hostDeviceFrom(id: String, data: Map<String, Any?>): HostDevice? {
     val displayName = data[GroupFields.DISPLAY_NAME] as? String ?: return null
     val model = data[GroupFields.MODEL] as? String ?: return null
-    @Suppress("DEPRECATION")
-    val online = data[GroupFields.ONLINE] as? Boolean ?: false
-    @Suppress("DEPRECATION")
-    val lastSeenEpochMs = (data[GroupFields.LAST_SEEN] as? Number)?.toLong() ?: 0L
     val groupId = data[GroupFields.GROUP_ID] as? String
     val enrolledAtEpochMs = (data[GroupFields.ENROLLED_AT] as? Number)?.toLong()
     val accessibility = ToggleState.fromWire(data[GroupFields.ACCESSIBILITY])
@@ -76,8 +70,6 @@ fun hostDeviceFrom(id: String, data: Map<String, Any?>): HostDevice? {
         id = id,
         displayName = displayName,
         model = model,
-        online = online,
-        lastSeenEpochMs = lastSeenEpochMs,
         groupId = groupId,
         enrolledAtEpochMs = enrolledAtEpochMs,
         accessibility = accessibility,
@@ -169,12 +161,6 @@ object GroupWrites {
         GroupFields.AT to at,
         GroupFields.DETECTED_LATE to detectedLate,
         GroupFields.GROUP_ID to groupId,
-    )
-
-    @Deprecated("Replaced by status and check reply fields")
-    fun heartbeatFields(online: Boolean, now: Any): Map<String, Any?> = mapOf(
-        GroupFields.ONLINE to online,
-        GroupFields.LAST_SEEN to now,
     )
 
     fun removeFromGroupFields(): Map<String, Any?> = mapOf(

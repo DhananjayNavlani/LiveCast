@@ -8,7 +8,6 @@ expect val groupPlatformModule: Module
 
 val clientGroupModule: Module = module {
     includes(groupPlatformModule)
-    single<PresenceClock> { SystemPresenceClock() }
     viewModel { MyDevicesViewModel(get(), get(), get(), get()) }
     viewModel { GroupManagementViewModel(get(), get(), get()) }
     viewModel { VerifyEmailViewModel(get(), get()) }

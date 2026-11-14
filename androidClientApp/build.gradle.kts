@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -19,12 +20,23 @@ android {
     namespace = "com.dhananjay.livecast.client"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
+    val localProps = Properties().apply {
+        val localFile = rootProject.file("local.properties")
+        if (localFile.exists()) {
+            localFile.inputStream().use { load(it) }
+        }
+    }
+    val livecastServerUrl: String = (project.findProperty("livecast.serverUrl") as? String)
+        ?: localProps.getProperty("livecast.serverUrl")
+        ?: ""
+
     defaultConfig {
         applicationId = "com.dhananjay.livecast.client"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0.0"
+        buildConfigField("String", "LIVECAST_SERVER_URL", "\"${livecastServerUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
     compileOptions {
@@ -34,6 +46,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -51,6 +64,13 @@ android {
             isMinifyEnabled = false
             isDebuggable = false
         }
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force("com.squareup.okhttp3:okhttp:5.4.0")
+        force("com.squareup.okhttp3:okhttp-android:5.4.0")
     }
 }
 

@@ -32,12 +32,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.dhananjay.livecast.client.check.CheckState
+import com.dhananjay.livecast.client.check.formatClock
 import com.dhananjay.livecast.protocol.HostDevice
+import com.dhananjay.livecast.protocol.ToggleState
 import com.dhananjay.livecast.ui.components.HorizontalSpacer
 import com.dhananjay.livecast.ui.components.LiveCastButton
 import com.dhananjay.livecast.ui.components.LiveCastButtonVariant
 import com.dhananjay.livecast.ui.components.VerticalSpacer
 import com.dhananjay.livecast.ui.theme.LiveCastTheme
+import kotlinx.datetime.TimeZone
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -200,6 +204,7 @@ fun MyDevicesScreen(
                             DeviceRowCard(
                                 row = row,
                                 onClick = { onDeviceClick(row.device) },
+                                onCheck = { viewModel.check(row.device.id) },
                                 onRemove = { rowToRemove = row }
                             )
                         }
@@ -255,6 +260,7 @@ fun MyDevicesScreen(
 private fun DeviceRowCard(
     row: DeviceRow,
     onClick: () -> Unit,
+    onCheck: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -266,56 +272,106 @@ private fun DeviceRowCard(
         backgroundColor = LiveCastTheme.colors.surface,
         elevation = 2.dp
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
-            Column(
-                modifier = Modifier.weight(1f)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (row.online) Color(0xFF4CAF50) else Color(0xFF9E9E9E)
-                            )
-                    )
-                    HorizontalSpacer(8)
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = row.device.displayName,
                         style = LiveCastTheme.typography.h3,
                         color = LiveCastTheme.colors.text
                     )
+                    VerticalSpacer(4)
+                    val details = if (row.groupName.isNotBlank()) {
+                        "${row.device.model} • ${row.groupName}"
+                    } else {
+                        row.device.model
+                    }
+                    Text(
+                        text = details,
+                        style = LiveCastTheme.typography.body2,
+                        color = LiveCastTheme.colors.textSecondary
+                    )
                 }
 
+                if (row.canRemove) {
+                    HorizontalSpacer(8)
+                    LiveCastButton(
+                        text = "Remove from group",
+                        onClick = onRemove,
+                        variant = LiveCastButtonVariant.Outlined
+                    )
+                }
+            }
+
+            VerticalSpacer(8)
+
+            val a11yPrefix = when (row.accessibility) {
+                ToggleState.ON -> "Accessibility: On"
+                ToggleState.OFF -> "Accessibility: Off"
+                ToggleState.UNKNOWN -> "Accessibility: Unknown"
+            }
+            val a11yText = if (row.statusAtEpochMs != null) {
+                "$a11yPrefix · ${formatClock(row.statusAtEpochMs, TimeZone.currentSystemDefault())}"
+            } else {
+                a11yPrefix
+            }
+            Text(
+                text = a11yText,
+                style = LiveCastTheme.typography.body2,
+                color = LiveCastTheme.colors.textSecondary
+            )
+
+            if (row.notifications == ToggleState.OFF) {
                 VerticalSpacer(4)
-
-                val details = if (row.groupName.isNotBlank()) {
-                    "${row.device.model} • ${row.groupName}"
-                } else {
-                    row.device.model
-                }
                 Text(
-                    text = details,
+                    text = "Notifications blocked on the device",
                     style = LiveCastTheme.typography.body2,
-                    color = LiveCastTheme.colors.textSecondary
+                    color = LiveCastTheme.colors.error
                 )
             }
 
-            if (row.canRemove) {
-                HorizontalSpacer(8)
+            VerticalSpacer(8)
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 LiveCastButton(
-                    text = "Remove from group",
-                    onClick = onRemove,
-                    variant = LiveCastButtonVariant.Outlined
+                    text = "Check",
+                    onClick = onCheck,
+                    variant = LiveCastButtonVariant.Primary
                 )
+
+                val checkResultText = when (val c = row.check) {
+                    is CheckState.Idle -> null
+                    is CheckState.Checking -> "Checking…"
+                    is CheckState.Online -> "Online at ${formatClock(c.atEpochMs, TimeZone.currentSystemDefault())}"
+                    is CheckState.Offline -> "Offline (no reply in 20 s)"
+                    is CheckState.AppRemoved -> "App removed"
+                    is CheckState.NotSetUp -> "Not set up for checks"
+                    is CheckState.RateLimited -> "Too many checks, wait a moment"
+                    is CheckState.Error -> c.message
+                }
+
+                if (checkResultText != null) {
+                    Text(
+                        text = checkResultText,
+                        style = LiveCastTheme.typography.body2,
+                        color = when (row.check) {
+                            is CheckState.Online -> Color(0xFF4CAF50)
+                            is CheckState.Offline, is CheckState.AppRemoved, is CheckState.Error -> LiveCastTheme.colors.error
+                            else -> LiveCastTheme.colors.textSecondary
+                        }
+                    )
+                }
             }
         }
     }

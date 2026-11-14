@@ -2,6 +2,7 @@ plugins {
     id("livecast.kmp.library")
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
@@ -12,6 +13,12 @@ kotlin {
             implementation(projects.transport)
             implementation(projects.designsystem)
             implementation(projects.auth)
+
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
 
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
@@ -29,16 +36,23 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.ktor.client.mock)
         }
 
         androidMain.dependencies {
             implementation(project.dependencies.platform(libs.firebase.android.bom))
             implementation(libs.firebase.firestore)
             implementation(libs.firebase.auth)
+            implementation(libs.ktor.client.okhttp)
         }
 
         desktopMain.dependencies {
             implementation(projects.firestoreGrpc)
+            implementation(libs.ktor.client.cio)
+        }
+
+        iosMain.dependencies {
+            implementation(libs.ktor.client.darwin)
         }
     }
 }

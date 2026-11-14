@@ -11,23 +11,6 @@ import kotlin.test.assertTrue
 class GroupRulesTest {
 
     @Test
-    fun onlineWindowBoundary() {
-        val now = 1_000_000L
-
-        // online + lastSeen 880_000 -> true (now - lastSeen = 120_000 <= 120_000)
-        val deviceOnline1 = HostDevice("d1", "Pixel", "P8", online = true, lastSeenEpochMs = 880_000L)
-        assertTrue(GroupRules.isOnline(deviceOnline1, now))
-
-        // online + lastSeen 879_999 -> false (now - lastSeen = 120_001 > 120_000)
-        val deviceOnline2 = HostDevice("d2", "Pixel", "P8", online = true, lastSeenEpochMs = 879_999L)
-        assertFalse(GroupRules.isOnline(deviceOnline2, now))
-
-        // online = false + lastSeen = now -> false
-        val deviceOffline = HostDevice("d3", "Pixel", "P8", online = false, lastSeenEpochMs = now)
-        assertFalse(GroupRules.isOnline(deviceOffline, now))
-    }
-
-    @Test
     fun supervisorsOfOrdersOwnerFirstAndDropsDevices() {
         val members = listOf(
             GroupMember("g1", "bob@x.com", GroupRole.SUPERVISOR, "bob", 100L),

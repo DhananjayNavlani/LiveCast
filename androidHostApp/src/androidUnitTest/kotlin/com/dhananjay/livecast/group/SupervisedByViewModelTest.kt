@@ -174,7 +174,7 @@ class SupervisedByViewModelTest {
         val members = FakeGroupMembersDirectory()
 
         registry.deviceFlow.tryEmit(
-            HostDevice(id = "dev-1", displayName = "Pixel", model = "P8", groupId = "g1", lastSeenEpochMs = 1000L)
+            HostDevice(id = "dev-1", displayName = "Pixel", model = "P8", groupId = "g1", statusAtEpochMs = 1000L)
         )
 
         val vm = SupervisedByViewModel(identity, registry, members)
@@ -182,9 +182,9 @@ class SupervisedByViewModelTest {
 
         assertEquals(1, members.observedGroups.size)
 
-        // Heartbeat snapshot: same groupId, updated lastSeen
+        // Snapshot update: same groupId, updated statusAt
         registry.deviceFlow.tryEmit(
-            HostDevice(id = "dev-1", displayName = "Pixel", model = "P8", groupId = "g1", lastSeenEpochMs = 46000L)
+            HostDevice(id = "dev-1", displayName = "Pixel", model = "P8", groupId = "g1", statusAtEpochMs = 46000L)
         )
         advanceUntilIdle()
 
